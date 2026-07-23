@@ -1,0 +1,583 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#071b3a">
+  <title>T3 スタッツ入力UIモック</title>
+  <!--
+    目次
+    §1 共通スタイル
+    §2 タブ・共通トップバー
+    §3 案A ラリー結果
+    §4 案B コート図
+    §5 案C 背番号フリック
+    §6 集計・設定イメージ
+    §7 モーダル・トースト
+    §8 状態・共通処理
+    §9 案A処理
+    §10 案B処理
+    §11 案C処理
+    §12 集計・設定処理
+  -->
+  <style>
+    /* §1 共通スタイル */
+    :root {
+      color-scheme: dark;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      --bg: #071b3a;
+      --panel: #0d2a52;
+      --panel2: #123561;
+      --line: #31547e;
+      --blue: #36a9ff;
+      --blue2: #126ab0;
+      --red: #ff6473;
+      --red2: #a73143;
+      --muted: #acc2dc;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-width: 320px; min-height: 100%; background: var(--bg); color: #fff; }
+    body { height: 100vh; overflow: hidden; }
+    button, input { font: inherit; }
+    button { color: inherit; cursor: pointer; }
+    button:focus-visible, input:focus-visible { outline: 3px solid #ffe36e; outline-offset: 2px; }
+    .mock-banner {
+      height: 24px; display: grid; place-items: center; background: #f0b429; color: #1c2430;
+      font-size: 12px; font-weight: 900; letter-spacing: .04em;
+    }
+    .tabs {
+      height: 58px; display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px;
+      padding: 5px 8px; background: #04142c; border-bottom: 1px solid var(--line);
+    }
+    .tab {
+      min-height: 48px; border: 0; border-radius: 9px; background: #10294b; color: #c9dbef;
+      font-weight: 800; font-size: 15px;
+    }
+    .tab[aria-selected="true"] { background: var(--blue); color: #04152c; }
+    .page { display: none; height: calc(100vh - 82px); overflow: auto; }
+    .page.active { display: block; }
+    .entry-page { overflow: hidden; }
+    .topbar {
+      height: 56px; display: flex; align-items: center; gap: 16px; padding: 5px 14px;
+      background: #0a2447; border-bottom: 1px solid var(--line);
+    }
+    .score { min-width: 112px; font-size: 30px; line-height: 1; font-weight: 900; color: #fff; transition: transform .25s, color .25s; }
+    .score.bump { transform: scale(1.18); color: #77c8ff; }
+    .status { font-weight: 800; color: #dceafb; white-space: nowrap; }
+    .badge { padding: 6px 12px; border-radius: 999px; background: #24598c; font-weight: 900; }
+    .serve { color: #ffd878; }
+    .undo {
+      min-width: 112px; min-height: 46px; margin-left: auto; border: 1px solid #6687aa;
+      border-radius: 10px; background: #173859; font-weight: 800;
+    }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; }
+    .muted { color: var(--muted); }
+
+    /* §2 タブ・共通トップバー */
+    .entry-body { height: calc(100% - 56px); padding: 10px 14px; }
+
+    /* §3 案A ラリー結果 */
+    .rally-layout { height: calc(100% - 70px); display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .rally-side { display: grid; grid-template-rows: auto 1fr; gap: 6px; padding: 10px; border-radius: 14px; }
+    .rally-side.ours { background: rgba(29, 121, 191, .18); border: 1px solid #297ec0; }
+    .rally-side.theirs { background: rgba(180, 49, 65, .16); border: 1px solid #9b4050; }
+    .rally-side h2 { margin: 0; text-align: center; font-size: 20px; }
+    .rally-buttons { display: grid; gap: 7px; min-height: 0; }
+    .rally-buttons.four { grid-template-rows: repeat(4, 1fr); }
+    .rally-buttons.five { grid-template-rows: repeat(5, 1fr); }
+    .rally-action { min-height: 48px; border: 0; border-radius: 11px; font-size: 19px; font-weight: 900; }
+    .ours .rally-action { background: var(--blue2); }
+    .theirs .rally-action { background: var(--red2); }
+    .receive-row {
+      height: 64px; display: flex; align-items: center; gap: 8px; padding: 6px 4px 0;
+      color: var(--muted); font-size: 13px;
+    }
+    .receive-row strong { color: #fff; }
+    .chip {
+      min-width: 48px; min-height: 48px; border: 1px solid #54779e; border-radius: 9px;
+      background: #173b63; font-weight: 900;
+    }
+    .receive-note { margin-left: auto; }
+
+    /* §4 案B コート図 */
+    .court-tools { height: 48px; display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
+    .switch { display: inline-flex; align-items: center; gap: 8px; font-weight: 800; }
+    .switch input { width: 48px; height: 28px; accent-color: var(--blue); }
+    .court-wrap { position: relative; height: calc(100% - 48px); display: grid; place-items: center; }
+    #courtSvg { width: min(100%, 1050px); height: auto; max-height: 100%; filter: drop-shadow(0 8px 16px rgba(0,0,0,.25)); }
+    .court-player { cursor: pointer; }
+    .court-player circle { fill: #1279be; stroke: #d8f0ff; stroke-width: 3; }
+    .court-player text { fill: #fff; text-anchor: middle; pointer-events: none; font-weight: 900; }
+    .court-player .name { font-size: 14px; }
+    .court-player .number { font-size: 22px; }
+    .popup {
+      position: fixed; z-index: 20; display: none; grid-template-columns: 1fr 1fr; gap: 5px;
+      width: 310px; padding: 8px; border: 1px solid #6d91b9; border-radius: 11px;
+      background: #071b3a; box-shadow: 0 10px 28px rgba(0,0,0,.45);
+    }
+    .popup.show { display: grid; }
+    .popup button { min-height: 48px; border: 0; border-radius: 8px; background: #185b91; font-weight: 800; }
+    #opponentPopup button { background: #8c3041; }
+
+    /* §5 案C 背番号フリック */
+    .flick-body { display: grid; grid-template-rows: 42% 58%; gap: 10px; height: calc(100% - 56px); padding: 10px 14px 14px; }
+    .legend-card { display: grid; place-items: center; padding: 10px; }
+    .legend-cross { display: grid; grid-template-columns: repeat(3, 150px); grid-template-rows: repeat(3, 52px); gap: 5px; text-align: center; }
+    .legend-item { display: grid; place-items: center; border-radius: 9px; background: #173e69; font-weight: 900; }
+    .legend-up { grid-column: 2; grid-row: 1; }
+    .legend-left { grid-column: 1; grid-row: 2; }
+    .legend-center { grid-column: 2; grid-row: 2; background: #0b2547; color: var(--muted); }
+    .legend-right { grid-column: 3; grid-row: 2; }
+    .legend-down { grid-column: 2; grid-row: 3; }
+    .player-grid { display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(3, 1fr); gap: 8px; min-height: 0; }
+    .player-button {
+      min-width: 48px; min-height: 48px; border: 1px solid #3b78ac; border-radius: 10px;
+      background: #104774; font-weight: 900; touch-action: none;
+    }
+    .player-button .num { display: block; font-size: 24px; }
+    .libero { display: inline-block; margin-left: 4px; padding: 1px 5px; border-radius: 7px; background: #f3b23c; color: #172033; font-size: 10px; }
+    .chooser { position: fixed; z-index: 24; display: none; width: 260px; height: 220px; }
+    .chooser.show { display: grid; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 5px; }
+    .chooser button { min-height: 48px; border: 0; border-radius: 9px; background: #176da8; font-weight: 900; }
+    .chooser .up { grid-area: 1 / 2; } .chooser .left { grid-area: 2 / 1; }
+    .chooser .middle { grid-area: 2 / 2; background: #253d5b; } .chooser .right { grid-area: 2 / 3; }
+    .chooser .down { grid-area: 3 / 2; }
+    .result-pop { position: fixed; z-index: 25; display: none; gap: 6px; padding: 8px; border-radius: 11px; background: #071b3a; border: 1px solid #7295bd; }
+    .result-pop.show { display: flex; }
+    .result-pop button { min-width: 86px; min-height: 48px; border: 0; border-radius: 8px; background: #1875af; font-weight: 900; }
+
+    /* §6 集計・設定イメージ */
+    .info-page { padding: 16px 22px 24px; }
+    .info-title { margin: 0 0 12px; font-size: 27px; }
+    .periods { display: flex; gap: 7px; margin-bottom: 14px; }
+    .period { min-height: 48px; padding: 0 22px; border: 1px solid #54779e; border-radius: 9px; background: #173859; font-weight: 800; }
+    .period[aria-pressed="true"] { background: var(--blue); color: #04152c; }
+    .tables { display: grid; grid-template-columns: 1.2fr 1fr; gap: 16px; }
+    .table-card { padding: 12px; }
+    .table-card h2 { margin: 0 0 8px; font-size: 19px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { padding: 8px 9px; border-bottom: 1px solid #31547e; text-align: center; }
+    th { background: #173859; }
+    tr.weak { background: rgba(255, 72, 95, .24); }
+    .warning { color: #ffbec5; font-weight: 900; }
+    .bottom-note { padding: 14px; text-align: center; color: #c7dbef; }
+    .settings { max-width: 980px; margin: 0 auto; display: grid; grid-template-columns: 1.15fr .85fr; gap: 14px; }
+    .setting-card { padding: 14px; }
+    .setting-card h2 { margin: 0 0 10px; font-size: 20px; }
+    .radio-choice { display: flex; align-items: flex-start; gap: 10px; min-height: 62px; padding: 8px; border-radius: 9px; }
+    .radio-choice:has(input:checked) { background: #174d79; }
+    .radio-choice input { width: 24px; height: 24px; accent-color: var(--blue); }
+    .radio-choice strong, .radio-choice span { display: block; }
+    .radio-choice span { margin-top: 2px; color: #bed0e5; font-size: 13px; }
+    .scout { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+    .scout input { width: 48px; height: 28px; accent-color: var(--blue); }
+    .roster-list { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px 10px; margin: 0; padding: 0; list-style: none; }
+
+    /* §7 モーダル・トースト */
+    .modal-backdrop { position: fixed; z-index: 30; inset: 0; display: none; place-items: center; padding: 20px; background: rgba(0, 8, 23, .78); }
+    .modal-backdrop.show { display: grid; }
+    .modal { width: min(900px, 94vw); padding: 16px; border: 1px solid #638bb5; border-radius: 15px; background: #0b274a; }
+    .modal h2 { margin: 0 0 12px; }
+    .modal-grid { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+    .modal-player { min-height: 64px; border: 1px solid #4385ba; border-radius: 9px; background: #104875; font-weight: 900; }
+    .modal-player .num { display: block; font-size: 22px; }
+    .modal-close { min-width: 90px; min-height: 48px; margin-top: 10px; border: 0; border-radius: 9px; background: #334c69; font-weight: 800; }
+    #toast {
+      position: fixed; z-index: 50; left: 50%; bottom: 22px; transform: translate(-50%, 20px);
+      min-width: 320px; max-width: 90vw; padding: 14px 20px; border-radius: 11px;
+      background: #fff; color: #061a37; text-align: center; font-weight: 900; opacity: 0; pointer-events: none;
+      transition: opacity .18s, transform .18s;
+    }
+    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+    @media (max-width: 800px) {
+      body { overflow: auto; }
+      .tabs { height: auto; grid-template-columns: 1fr 1fr; }
+      .page { height: auto; min-height: calc(100vh - 130px); }
+      .entry-page { overflow: auto; }
+      .rally-layout, .tables, .settings { grid-template-columns: 1fr; height: auto; }
+      .rally-buttons { min-height: 290px; }
+      .receive-row { height: auto; flex-wrap: wrap; }
+      .player-grid { grid-template-columns: repeat(3, 1fr); grid-template-rows: none; }
+      .flick-body { height: auto; grid-template-rows: auto auto; }
+      .legend-cross { grid-template-columns: repeat(3, minmax(85px, 120px)); }
+      .topbar { gap: 8px; overflow-x: auto; }
+      .modal-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+  </style>
+</head>
+<body>
+  <div class="mock-banner">これはモックです。保存されません</div>
+  <nav class="tabs" role="tablist" aria-label="入力方式とイメージ">
+    <button class="tab" role="tab" aria-selected="true" data-page="rally">案A ラリー結果</button>
+    <button class="tab" role="tab" aria-selected="false" data-page="court">案B コート図</button>
+    <button class="tab" role="tab" aria-selected="false" data-page="flick">案C フリック</button>
+    <button class="tab" role="tab" aria-selected="false" data-page="summary">集計イメージ</button>
+    <button class="tab" role="tab" aria-selected="false" data-page="settings">設定イメージ</button>
+  </nav>
+
+  <main>
+    <!-- §3 案A ラリー結果 -->
+    <section id="rally" class="page entry-page active">
+      <div class="topbar">
+        <div class="score"><span class="our-score">12</span> - <span class="their-score">9</span></div>
+        <span class="status">セット1</span><span class="badge">S3</span><span class="status serve">相手サーブ🏐</span>
+        <button class="undo" type="button">↩ とりけし</button>
+      </div>
+      <div class="entry-body">
+        <div class="rally-layout">
+          <section class="rally-side ours">
+            <h2>うちの得点</h2>
+            <div class="rally-buttons four">
+              <button class="rally-action" data-action="アタック決定" data-player="true" data-side="our">アタック決定</button>
+              <button class="rally-action" data-action="ブロック" data-player="true" data-side="our">ブロック</button>
+              <button class="rally-action" data-action="サーブエース" data-side="our">サーブエース</button>
+              <button class="rally-action" data-action="相手のミス" data-side="our">相手のミス</button>
+            </div>
+          </section>
+          <section class="rally-side theirs">
+            <h2>相手の得点</h2>
+            <div class="rally-buttons five">
+              <button class="rally-action" data-action="アタックミス" data-player="true" data-side="their">アタックミス</button>
+              <button class="rally-action" data-action="ブロックされた" data-player="true" data-side="their">ブロックされた</button>
+              <button class="rally-action" data-action="サーブミス" data-side="their">サーブミス</button>
+              <button class="rally-action" data-action="レシーブ・つなぎのミス" data-player="true" data-side="their">レシーブ・つなぎのミス</button>
+              <button class="rally-action" data-action="相手のアタックが決まった" data-side="their">相手のアタックが決まった</button>
+            </div>
+          </section>
+        </div>
+        <div class="receive-row">
+          <strong>サーブレシーブ評価（ふつうモード時のみ）:</strong>
+          <button class="chip receive-chip" type="button">A</button><button class="chip receive-chip" type="button">B</button>
+          <button class="chip receive-chip" type="button">C</button><button class="chip receive-chip" type="button">エラー</button>
+          <span class="receive-note">設定が「かんたん」のときは出ません</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- §4 案B コート図 -->
+    <section id="court" class="page entry-page">
+      <div class="topbar">
+        <div class="score"><span class="our-score">12</span> - <span class="their-score">9</span></div>
+        <span class="status">セット1</span><span class="badge">S3</span><span class="status serve">相手サーブ🏐</span>
+        <button class="undo" type="button">↩ とりけし</button>
+      </div>
+      <div class="entry-body">
+        <div class="court-tools"><label class="switch">コース記録 <input id="courseToggle" type="checkbox" role="switch"></label></div>
+        <div class="court-wrap">
+          <svg id="courtSvg" viewBox="0 0 1000 500" aria-label="横向きバレーコート">
+            <defs>
+              <marker id="arrowHead" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 5 L 0 10 z" fill="#ffe05c"></path>
+              </marker>
+            </defs>
+            <rect x="30" y="25" width="940" height="450" rx="6" fill="#b46b31" stroke="#fff" stroke-width="5"></rect>
+            <rect id="ourCourt" x="30" y="25" width="470" height="450" fill="#207db6" fill-opacity=".72"></rect>
+            <rect id="opponentCourt" x="500" y="25" width="470" height="450" fill="#a83f4f" fill-opacity=".55"></rect>
+            <g fill="none" stroke="#fff" stroke-width="4">
+              <rect x="30" y="25" width="940" height="450"></rect><line x1="500" y1="25" x2="500" y2="475"></line>
+              <line x1="343" y1="25" x2="343" y2="475"></line><line x1="657" y1="25" x2="657" y2="475"></line>
+            </g>
+            <g id="courseLines"></g>
+            <g class="court-player" data-number="4" data-name="りく" transform="translate(415 110)"><circle r="43"></circle><text class="number" y="-5">4</text><text class="name" y="20">りく</text></g>
+            <g class="court-player" data-number="9" data-name="だいち" transform="translate(415 250)"><circle r="43"></circle><text class="number" y="-5">9</text><text class="name" y="20">だいち</text></g>
+            <g class="court-player" data-number="12" data-name="たくみ" transform="translate(415 390)"><circle r="43"></circle><text class="number" y="-5">12</text><text class="name" y="20">たくみ</text></g>
+            <g class="court-player" data-number="1" data-name="はると" transform="translate(165 110)"><circle r="43"></circle><text class="number" y="-5">1</text><text class="name" y="20">はると</text></g>
+            <g class="court-player" data-number="7" data-name="れん" transform="translate(165 250)"><circle r="43" fill="#d89120"></circle><text class="number" y="-5">7</text><text class="name" y="20">れん</text></g>
+            <g class="court-player" data-number="15" data-name="ゆうご" transform="translate(165 390)"><circle r="43"></circle><text class="number" y="-5">15</text><text class="name" y="20">ゆうご</text></g>
+          </svg>
+        </div>
+      </div>
+    </section>
+
+    <!-- §5 案C 背番号フリック -->
+    <section id="flick" class="page entry-page">
+      <div class="topbar">
+        <div class="score"><span class="our-score">12</span> - <span class="their-score">9</span></div>
+        <span class="status">セット1</span><span class="badge">S3</span><span class="status serve">相手サーブ🏐</span>
+        <button class="undo" type="button">↩ とりけし</button>
+      </div>
+      <div class="flick-body">
+        <section class="legend-card panel">
+          <div class="legend-cross">
+            <div class="legend-item legend-up">↑ 上フリック<br>アタック</div>
+            <div class="legend-item legend-left">← 左フリック<br>ブロック</div>
+            <div class="legend-item legend-center">背番号を<br>フリック</div>
+            <div class="legend-item legend-right">右フリック →<br>サーブ</div>
+            <div class="legend-item legend-down">↓ 下フリック<br>レシーブ</div>
+          </div>
+        </section>
+        <div id="flickPlayerGrid" class="player-grid"></div>
+      </div>
+    </section>
+
+    <!-- §6 集計・設定イメージ -->
+    <section id="summary" class="page info-page">
+      <h1 class="info-title">この試合</h1>
+      <div class="periods"><button class="period" aria-pressed="true">この試合</button><button class="period" aria-pressed="false">今月</button><button class="period" aria-pressed="false">全部</button></div>
+      <div class="tables">
+        <section class="table-card panel">
+          <h2>ローテ別</h2>
+          <table><thead><tr><th>ローテ</th><th>取った点</th><th>取られた点</th><th>サイドアウト率</th></tr></thead>
+            <tbody>
+              <tr><th>S1</th><td>6</td><td>4</td><td>60% (10本中)</td></tr>
+              <tr><th>S2</th><td>5</td><td>4</td><td>56% (9本中)</td></tr>
+              <tr class="weak"><th>S3</th><td>2</td><td>6</td><td>25% (8本中)<br><span class="warning">⚠ここが弱い</span></td></tr>
+              <tr><th>S4</th><td>5</td><td>3</td><td>63% (8本中)</td></tr>
+              <tr><th>S5</th><td>4</td><td>4</td><td>50% (8本中)</td></tr>
+              <tr><th>S6</th><td>7</td><td>5</td><td>58% (12本中)</td></tr>
+            </tbody>
+          </table>
+        </section>
+        <section class="table-card panel">
+          <h2>個人</h2>
+          <table><thead><tr><th>選手</th><th>サーブイン率</th><th>エース</th><th>アタック決定率</th><th>効果率</th></tr></thead>
+            <tbody>
+              <tr><th>4 りく</th><td>88%</td><td>2</td><td>46%</td><td>31%</td></tr>
+              <tr><th>9 だいち</th><td>81%</td><td>1</td><td>38%</td><td>24%</td></tr>
+              <tr><th>12 たくみ</th><td>92%</td><td>3</td><td>42%</td><td>29%</td></tr>
+            </tbody>
+          </table>
+        </section>
+      </div>
+      <div class="bottom-note">1試合ではローテ別は判断できません。複数試合ためて見ましょう</div>
+    </section>
+
+    <section id="settings" class="page info-page">
+      <h1 class="info-title">設定イメージ</h1>
+      <div class="settings">
+        <section class="setting-card panel">
+          <h2>記録の深さ</h2>
+          <label class="radio-choice"><input type="radio" name="depth" checked><span><strong>かんたん（ラリー結果だけ）</strong><span>どちらに点が入ったかを記録します。</span></span></label>
+          <label class="radio-choice"><input type="radio" name="depth"><span><strong>ふつう（＋サーブレシーブA/B/C）</strong><span>ラリー結果にサーブレシーブ評価を加えます。</span></span></label>
+          <label class="radio-choice"><input type="radio" name="depth"><span><strong>くわしい（＋ディグ・ブロック・セットも）</strong><span>プレーをくわしく記録します。</span></span></label>
+          <hr style="border:0;border-top:1px solid #31547e;margin:12px 0">
+          <label class="scout"><span><strong>相手チームの記録もとる（スカウト）</strong><br><span class="muted">ONにすると記録係の仕事が増えます。専任がいる日だけおすすめ</span></span><input type="checkbox" role="switch"></label>
+        </section>
+        <section class="setting-card panel">
+          <h2>メンバー登録</h2>
+          <ul id="settingsRoster" class="roster-list"></ul>
+          <p class="muted">編集はモックでは省略</p>
+        </section>
+      </div>
+    </section>
+  </main>
+
+  <div id="playerModal" class="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <div class="modal"><h2 id="modalTitle">選手を選んでください</h2><div id="modalGrid" class="modal-grid"></div><button id="modalClose" class="modal-close" type="button">閉じる</button></div>
+  </div>
+  <div id="playerPopup" class="popup"></div>
+  <div id="opponentPopup" class="popup"><button type="button">相手の得点</button><button type="button">相手のミス</button></div>
+  <div id="directionChooser" class="chooser">
+    <button class="up" data-play="アタック">アタック</button><button class="left" data-play="ブロック">ブロック</button>
+    <button class="middle" type="button">×</button><button class="right" data-play="サーブ">サーブ</button><button class="down" data-play="レシーブ">レシーブ</button>
+  </div>
+  <div id="resultPop" class="result-pop"><button type="button">決定！</button><button type="button">ミス</button><button type="button">つづく</button></div>
+  <div id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    'use strict';
+
+    // §8 状態・共通処理
+    const roster = [
+      [1,'はると'],[2,'そうた'],[3,'ゆうき'],[4,'りく'],[5,'いつき'],
+      [6,'あおい'],[7,'れん'],[8,'かなた'],[9,'だいち'],[10,'みなと'],
+      [11,'こうき'],[12,'たくみ'],[13,'しゅん'],[14,'けいた'],[15,'ゆうご']
+    ];
+    const toast = document.querySelector('#toast');
+    let toastTimer = 0;
+    let ourScore = 12;
+    let theirScore = 9;
+    function showToast(message) {
+      clearTimeout(toastTimer);
+      toast.textContent = message;
+      toast.classList.add('show');
+      toastTimer = setTimeout(() => toast.classList.remove('show'), 1500);
+    }
+    function updateScores(side) {
+      if (side === 'our') ourScore += 1;
+      if (side === 'their') theirScore += 1;
+      document.querySelectorAll('.our-score').forEach(el => el.textContent = ourScore);
+      document.querySelectorAll('.their-score').forEach(el => el.textContent = theirScore);
+      document.querySelectorAll('.score').forEach(el => {
+        el.classList.remove('bump');
+        void el.offsetWidth;
+        el.classList.add('bump');
+        setTimeout(() => el.classList.remove('bump'), 350);
+      });
+    }
+    function positionFloating(element, clientX, clientY) {
+      element.style.left = `${Math.max(8, Math.min(clientX - element.offsetWidth / 2, innerWidth - element.offsetWidth - 8))}px`;
+      element.style.top = `${Math.max(90, Math.min(clientY + 12, innerHeight - element.offsetHeight - 8))}px`;
+    }
+    function closeFloaters() {
+      document.querySelectorAll('.popup,.chooser,.result-pop').forEach(el => el.classList.remove('show'));
+    }
+    document.querySelectorAll('.tab').forEach(tab => tab.addEventListener('click', () => {
+      document.querySelectorAll('.tab').forEach(button => button.setAttribute('aria-selected', String(button === tab)));
+      document.querySelectorAll('.page').forEach(page => page.classList.toggle('active', page.id === tab.dataset.page));
+      closeFloaters();
+    }));
+    document.querySelectorAll('.undo').forEach(button => button.addEventListener('click', () => showToast('1つ前に戻しました')));
+    document.addEventListener('keydown', event => {
+      if (event.key === 'Escape') {
+        document.querySelector('#playerModal').classList.remove('show');
+        closeFloaters();
+      }
+    });
+
+    // §9 案A処理
+    const playerModal = document.querySelector('#playerModal');
+    const modalGrid = document.querySelector('#modalGrid');
+    let pendingRally = null;
+    roster.forEach(([number, name]) => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'modal-player';
+      button.innerHTML = `<span class="num">${number}</span>${name}${number === 7 ? '<span class="libero">リベロ</span>' : ''}`;
+      button.addEventListener('click', () => {
+        if (!pendingRally) return;
+        showToast(`記録: ${pendingRally.action} #${number} ${name}`);
+        updateScores(pendingRally.side);
+        playerModal.classList.remove('show');
+        pendingRally = null;
+      });
+      modalGrid.append(button);
+    });
+    document.querySelectorAll('.rally-action').forEach(button => button.addEventListener('click', () => {
+      const action = button.dataset.action;
+      const side = button.dataset.side;
+      if (button.dataset.player) {
+        pendingRally = { action, side };
+        document.querySelector('#modalTitle').textContent = `${action}：選手を選んでください`;
+        playerModal.classList.add('show');
+      } else {
+        const prefix = action === 'サーブエース' || action === 'サーブミス' ? '（サーバーは自動でわかります）' : '';
+        showToast(`記録: ${action}${prefix}`);
+        updateScores(side);
+      }
+    }));
+    document.querySelector('#modalClose').addEventListener('click', () => playerModal.classList.remove('show'));
+    playerModal.addEventListener('click', event => { if (event.target === playerModal) playerModal.classList.remove('show'); });
+    document.querySelectorAll('.receive-chip').forEach(button => button.addEventListener('click', () => showToast(`サーブレシーブ評価: ${button.textContent}`)));
+
+    // §10 案B処理
+    const courtSvg = document.querySelector('#courtSvg');
+    const opponentCourt = document.querySelector('#opponentCourt');
+    const courseToggle = document.querySelector('#courseToggle');
+    const playerPopup = document.querySelector('#playerPopup');
+    const opponentPopup = document.querySelector('#opponentPopup');
+    const courseLines = document.querySelector('#courseLines');
+    let selectedCourtPlayer = null;
+    let courseArrows = [];
+    function svgPoint(event) {
+      const point = courtSvg.createSVGPoint();
+      point.x = event.clientX; point.y = event.clientY;
+      return point.matrixTransform(courtSvg.getScreenCTM().inverse());
+    }
+    document.querySelectorAll('.court-player').forEach(player => player.addEventListener('click', event => {
+      event.stopPropagation();
+      closeFloaters();
+      selectedCourtPlayer = {
+        number: player.dataset.number, name: player.dataset.name,
+        x: Number(player.getAttribute('transform').match(/translate\(([\d.]+)/)[1]),
+        y: Number(player.getAttribute('transform').match(/[\s,]([\d.]+)\)/)[1])
+      };
+      if (!courseToggle.checked) {
+        playerPopup.innerHTML = ['アタック決定','アタックミス','ブロック','レシーブした'].map(play => `<button type="button">${play}</button>`).join('');
+        playerPopup.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+          showToast(`記録: #${selectedCourtPlayer.number} ${selectedCourtPlayer.name} ${button.textContent}`);
+          closeFloaters();
+        }));
+        playerPopup.classList.add('show');
+        positionFloating(playerPopup, event.clientX, event.clientY);
+      } else {
+        showToast(`#${selectedCourtPlayer.number} ${selectedCourtPlayer.name}を選択。相手コートをタップ`);
+      }
+    }));
+    opponentCourt.addEventListener('click', event => {
+      event.stopPropagation();
+      const point = svgPoint(event);
+      if (courseToggle.checked && selectedCourtPlayer) {
+        const line = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+        line.setAttribute('x1', selectedCourtPlayer.x); line.setAttribute('y1', selectedCourtPlayer.y);
+        line.setAttribute('x2', point.x); line.setAttribute('y2', point.y);
+        line.setAttribute('stroke', '#ffe05c'); line.setAttribute('stroke-width', '6');
+        line.setAttribute('marker-end', 'url(#arrowHead)');
+        courseLines.append(line); courseArrows.push(line);
+        if (courseArrows.length > 5) courseArrows.shift().remove();
+        showToast(`コース記録: #${selectedCourtPlayer.number} ${selectedCourtPlayer.name}→相手コート`);
+        selectedCourtPlayer = null;
+      } else {
+        closeFloaters();
+        opponentPopup.classList.add('show');
+        positionFloating(opponentPopup, event.clientX, event.clientY);
+      }
+    });
+    opponentPopup.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+      showToast(`記録: ${button.textContent}`);
+      closeFloaters();
+    }));
+    courseToggle.addEventListener('change', () => { selectedCourtPlayer = null; closeFloaters(); });
+
+    // §11 案C処理
+    const flickGrid = document.querySelector('#flickPlayerGrid');
+    const directionChooser = document.querySelector('#directionChooser');
+    const resultPop = document.querySelector('#resultPop');
+    let pointerStart = null;
+    let selectedFlickPlayer = null;
+    let selectedPlay = '';
+    function openResults(play, player, x, y) {
+      selectedPlay = play; selectedFlickPlayer = player; closeFloaters();
+      resultPop.classList.add('show');
+      positionFloating(resultPop, x, y);
+    }
+    roster.forEach(([number, name]) => {
+      const button = document.createElement('button');
+      button.type = 'button'; button.className = 'player-button';
+      button.innerHTML = `<span class="num">${number}</span>${name}${number === 7 ? '<span class="libero">リベロ</span>' : ''}`;
+      button.addEventListener('pointerdown', event => {
+        pointerStart = { x: event.clientX, y: event.clientY, id: event.pointerId };
+        button.setPointerCapture(event.pointerId);
+      });
+      button.addEventListener('pointerup', event => {
+        if (!pointerStart || pointerStart.id !== event.pointerId) return;
+        const dx = event.clientX - pointerStart.x, dy = event.clientY - pointerStart.y;
+        selectedFlickPlayer = { number, name };
+        if (Math.max(Math.abs(dx), Math.abs(dy)) >= 30) {
+          const play = Math.abs(dx) > Math.abs(dy) ? (dx < 0 ? 'ブロック' : 'サーブ') : (dy < 0 ? 'アタック' : 'レシーブ');
+          openResults(play, selectedFlickPlayer, event.clientX, event.clientY);
+        } else {
+          closeFloaters();
+          directionChooser.classList.add('show');
+          positionFloating(directionChooser, event.clientX, event.clientY);
+        }
+        pointerStart = null;
+      });
+      button.addEventListener('pointercancel', () => { pointerStart = null; });
+      flickGrid.append(button);
+    });
+    directionChooser.querySelectorAll('[data-play]').forEach(button => button.addEventListener('click', event => {
+      openResults(button.dataset.play, selectedFlickPlayer, event.clientX, event.clientY);
+    }));
+    directionChooser.querySelector('.middle').addEventListener('click', closeFloaters);
+    resultPop.querySelectorAll('button').forEach(button => button.addEventListener('click', () => {
+      showToast(`#${selectedFlickPlayer.number} ${selectedFlickPlayer.name} ${selectedPlay}→${button.textContent}`);
+      closeFloaters();
+    }));
+
+    // §12 集計・設定処理
+    document.querySelectorAll('.period').forEach(button => button.addEventListener('click', () => {
+      document.querySelectorAll('.period').forEach(item => item.setAttribute('aria-pressed', String(item === button)));
+    }));
+    const settingsRoster = document.querySelector('#settingsRoster');
+    roster.forEach(([number, name]) => {
+      const item = document.createElement('li');
+      item.textContent = `${number} ${name}${number === 7 ? '（リベロ）' : ''}`;
+      settingsRoster.append(item);
+    });
+    document.addEventListener('click', event => {
+      if (!event.target.closest('.popup,.court-player,#opponentCourt,.chooser,.result-pop,.player-button')) closeFloaters();
+    });
+  </script>
+</body>
+</html>
