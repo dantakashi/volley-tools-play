@@ -1,0 +1,508 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#071b3a">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <title>ディレイカメラ</title>
+  <!--
+    目次
+    §1 CSS
+    §2 状態
+    §3 カメラ
+    §4 バッファ
+    §5 表示
+    §6 UI
+    §7 Wake Lock
+    §8 SW登録
+  -->
+  <style>
+    /* §1 CSS */
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    * {
+      box-sizing: border-box;
+      touch-action: manipulation;
+      user-select: none;
+      -webkit-touch-callout: none;
+    }
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      overscroll-behavior: none;
+      background: #000;
+      color: #fff;
+    }
+    button { font: inherit; color: inherit; }
+    .screen { position: fixed; inset: 0; }
+    #startScreen {
+      display: grid;
+      grid-template-rows: 1fr auto 1fr;
+      place-items: center;
+      padding: 32px 20px;
+      text-align: center;
+      background: #071b3a;
+    }
+    .intro h1 { margin: 0 0 12px; font-size: clamp(34px, 6vw, 64px); }
+    .intro p { margin: 0; font-size: clamp(17px, 2.5vw, 25px); }
+    #startButton {
+      min-width: min(440px, 92vw);
+      min-height: 76px;
+      padding: 16px 28px;
+      border: 0;
+      border-radius: 18px;
+      background: #36a9ff;
+      color: #04152c;
+      font-size: clamp(22px, 3.2vw, 32px);
+      font-weight: 800;
+      cursor: pointer;
+    }
+    #startButton:disabled { opacity: .6; cursor: default; }
+    #startHelp { align-self: end; font-size: clamp(15px, 2vw, 20px); line-height: 1.8; }
+    #errorMessage {
+      max-width: 760px;
+      margin: 18px auto 0;
+      color: #ffd2d2;
+      font-weight: 700;
+    }
+    #mainScreen { display: none; background: #000; }
+    #displayCanvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+    #sourceVideo { display: none; }
+    #livePreview {
+      display: none;
+      position: absolute;
+      top: 14px;
+      right: 14px;
+      z-index: 3;
+      width: 20%;
+      min-width: 120px;
+      max-height: 28vh;
+      border: 3px solid #fff;
+      border-radius: 10px;
+      background: #000;
+      object-fit: contain;
+    }
+    #delayBadge, #mirrorBadge {
+      position: absolute;
+      z-index: 4;
+      top: 14px;
+      padding: 9px 13px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, .68);
+      font-size: clamp(15px, 2vw, 21px);
+      font-weight: 800;
+    }
+    #delayBadge { left: 14px; }
+    #mirrorBadge { left: 14px; top: 62px; }
+    #buffering {
+      position: absolute;
+      z-index: 2;
+      inset: 0 0 72px;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: #000;
+      text-align: center;
+      font-size: clamp(30px, 6vw, 70px);
+      font-weight: 800;
+    }
+    #controls {
+      position: absolute;
+      z-index: 5;
+      right: 0;
+      bottom: 0;
+      left: 0;
+      min-height: 72px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px;
+      padding: 8px max(10px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(10px, env(safe-area-inset-left));
+      background: rgba(0, 0, 0, .72);
+    }
+    .segments { display: flex; border: 1px solid #aaa; border-radius: 10px; overflow: hidden; }
+    .segments button, .controlButton {
+      min-width: 48px;
+      min-height: 48px;
+      border: 0;
+      background: #303030;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .segments button + button { border-left: 1px solid #777; }
+    .segments button[aria-pressed="true"], .controlButton[aria-pressed="true"] { background: #187dc2; }
+    #delayAdjust { display: flex; align-items: center; gap: 5px; }
+    #delayAdjust button { min-width: 48px; min-height: 48px; }
+    #delayAdjust button:disabled { opacity: .5; cursor: default; }
+    #delayValue {
+      min-width: 48px;
+      text-align: center;
+      font-weight: 800;
+      pointer-events: none;
+    }
+    #pauseButton { min-width: 76px; min-height: 56px; font-size: 28px; border-radius: 12px; }
+    .controlButton { padding: 4px 10px; border-radius: 10px; }
+    #cameraButton { display: none; }
+    @media (max-width: 720px), (max-height: 560px) {
+      #controls { gap: 5px; flex-wrap: wrap; align-content: center; padding-top: 5px; padding-bottom: 5px; }
+      .segments button, .controlButton { min-height: 48px; padding: 3px 7px; font-size: 14px; }
+      #pauseButton { min-height: 52px; }
+      #buffering { bottom: 116px; }
+    }
+    @media (max-width: 430px) {
+      #controls { justify-content: space-around; }
+      .segments { order: 1; width: 100%; }
+      .segments button { flex: 1; }
+      #delayAdjust { order: 2; }
+      #buffering { bottom: 120px; }
+      #livePreview { width: 30%; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <section id="startScreen" class="screen">
+      <div class="intro">
+        <h1>ディレイカメラ</h1>
+        <p>数秒前の自分が見られる鏡です</p>
+        <p id="errorMessage" role="alert" hidden></p>
+      </div>
+      <button id="startButton" type="button">カメラをはじめる</button>
+      <div id="startHelp">① カメラをコートに向ける<br>② プレーする<br>③ 数秒あとに自分が映る</div>
+    </section>
+
+    <section id="mainScreen" class="screen">
+      <video id="sourceVideo" autoplay muted playsinline></video>
+      <video id="livePreview" autoplay muted playsinline></video>
+      <canvas id="displayCanvas"></canvas>
+      <div id="buffering" role="status">ためています… 0%</div>
+      <div id="delayBadge">5秒おくれ</div>
+      <div id="mirrorBadge">鏡像 ON</div>
+      <div id="controls">
+        <div class="segments" aria-label="遅延時間">
+          <button type="button" data-delay="3" aria-pressed="false">3秒</button>
+          <button type="button" data-delay="5" aria-pressed="true">5秒</button>
+          <button type="button" data-delay="10" aria-pressed="false">10秒</button>
+          <button type="button" data-delay="20" aria-pressed="false">20秒</button>
+          <button type="button" data-delay="30" aria-pressed="false">30秒</button>
+        </div>
+        <div id="delayAdjust" aria-label="遅延時間の調整">
+          <button id="delayMinusButton" class="controlButton" type="button" aria-label="遅延を1秒減らす">−</button>
+          <span id="delayValue">5秒</span>
+          <button id="delayPlusButton" class="controlButton" type="button" aria-label="遅延を1秒増やす">＋</button>
+        </div>
+        <button id="pauseButton" class="controlButton" type="button" aria-pressed="false" aria-label="一時停止">⏸</button>
+        <button id="mirrorButton" class="controlButton" type="button" aria-pressed="true">鏡像</button>
+        <button id="cameraButton" class="controlButton" type="button">カメラ切替</button>
+        <button id="liveButton" class="controlButton" type="button" aria-pressed="false">ライブ小窓</button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    'use strict';
+
+    // §2 状態
+    const MAX_FRAMES = 450;
+    const CAPTURE_INTERVAL = 1000 / 15;
+    const startScreen = document.querySelector('#startScreen');
+    const mainScreen = document.querySelector('#mainScreen');
+    const startButton = document.querySelector('#startButton');
+    const errorMessage = document.querySelector('#errorMessage');
+    const sourceVideo = document.querySelector('#sourceVideo');
+    const livePreview = document.querySelector('#livePreview');
+    const displayCanvas = document.querySelector('#displayCanvas');
+    const displayContext = displayCanvas.getContext('2d');
+    const captureCanvas = document.createElement('canvas');
+    const captureContext = captureCanvas.getContext('2d');
+    const buffering = document.querySelector('#buffering');
+    const delayBadge = document.querySelector('#delayBadge');
+    const mirrorBadge = document.querySelector('#mirrorBadge');
+    const pauseButton = document.querySelector('#pauseButton');
+    const mirrorButton = document.querySelector('#mirrorButton');
+    const cameraButton = document.querySelector('#cameraButton');
+    const liveButton = document.querySelector('#liveButton');
+    const delayButtons = [...document.querySelectorAll('[data-delay]')];
+    const delayMinusButton = document.querySelector('#delayMinusButton');
+    const delayPlusButton = document.querySelector('#delayPlusButton');
+    const delayValue = document.querySelector('#delayValue');
+
+    let stream = null;
+    let videoDevices = [];
+    let currentDeviceIndex = 0;
+    let frames = [];
+    let delaySeconds = 5;
+    let isPaused = false;
+    let isMirrored = true;
+    let isDrawing = false;
+    let searchIndex = 0;
+    let lastCaptureTime = 0;
+    let lastDisplayTime = 0;
+    let sourceWidth = 0;
+    let sourceHeight = 0;
+    let bufferStartedAt = 0;
+    let bufferGeneration = 0;
+    let wakeLock = null;
+    let loopStarted = false;
+
+    // §3 カメラ
+    async function startCamera(deviceId) {
+      if (!navigator.mediaDevices?.getUserMedia || !window.isSecureContext) {
+        throw new Error('INSECURE');
+      }
+
+      if (stream) {
+        stream.getTracks().forEach((track) => track.stop());
+      }
+
+      const videoConstraints = {
+        width: { ideal: 640 },
+        height: { ideal: 360 },
+        frameRate: { ideal: 30 }
+      };
+      if (deviceId) videoConstraints.deviceId = { exact: deviceId };
+
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: videoConstraints,
+        audio: false
+      });
+      sourceVideo.srcObject = stream;
+      livePreview.srcObject = stream;
+      await sourceVideo.play();
+      await livePreview.play();
+      fitCaptureCanvas();
+      clearBuffer();
+      await updateCameraDevices();
+    }
+
+    function fitCaptureCanvas() {
+      const width = sourceVideo.videoWidth || 640;
+      const height = sourceVideo.videoHeight || 360;
+      const fittedWidth = Math.min(640, width);
+      captureCanvas.width = fittedWidth;
+      captureCanvas.height = Math.max(1, Math.round(fittedWidth * height / width));
+      sourceWidth = width;
+      sourceHeight = height;
+    }
+
+    async function updateCameraDevices() {
+      if (!navigator.mediaDevices?.enumerateDevices) return;
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      videoDevices = devices.filter((device) => device.kind === 'videoinput');
+      const activeId = stream?.getVideoTracks()[0]?.getSettings().deviceId;
+      const activeIndex = videoDevices.findIndex((device) => device.deviceId === activeId);
+      if (activeIndex >= 0) currentDeviceIndex = activeIndex;
+      cameraButton.style.display = videoDevices.length >= 2 ? '' : 'none';
+    }
+
+    // §4 バッファ
+    function clearBuffer() {
+      frames = [];
+      searchIndex = 0;
+      lastCaptureTime = 0;
+      lastDisplayTime = 0;
+      isDrawing = false;
+      bufferStartedAt = performance.now();
+      bufferGeneration += 1;
+      buffering.style.display = 'grid';
+      buffering.textContent = 'ためています… 0%';
+    }
+
+    function captureFrame(now) {
+      if (!stream || sourceVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (now - lastCaptureTime < CAPTURE_INTERVAL) return;
+      lastCaptureTime = now;
+
+      const width = sourceVideo.videoWidth;
+      const height = sourceVideo.videoHeight;
+      if (width && height && (width !== sourceWidth || height !== sourceHeight)) {
+        fitCaptureCanvas();
+        clearBuffer();
+      }
+
+      captureContext.drawImage(sourceVideo, 0, 0, captureCanvas.width, captureCanvas.height);
+      const generation = bufferGeneration;
+      const capturedAt = performance.now();
+      captureCanvas.toBlob((blob) => {
+        if (!blob || generation !== bufferGeneration) return;
+        frames.push({ t: capturedAt, blob });
+        if (frames.length > MAX_FRAMES) {
+          const removed = frames.length - MAX_FRAMES;
+          frames.splice(0, removed);
+          searchIndex = Math.max(0, searchIndex - removed);
+        }
+      }, 'image/jpeg', 0.7);
+    }
+
+    // §5 表示
+    function fitDisplayCanvas() {
+      const pixelRatio = window.devicePixelRatio || 1;
+      displayCanvas.width = Math.round(window.innerWidth * pixelRatio);
+      displayCanvas.height = Math.round(window.innerHeight * pixelRatio);
+    }
+
+    function findClosestFrame(targetTime) {
+      if (!frames.length) return null;
+      if (targetTime < frames[0].t) return frames[0];
+      searchIndex = Math.min(searchIndex, frames.length - 1);
+      while (searchIndex + 1 < frames.length && frames[searchIndex + 1].t <= targetTime) {
+        searchIndex += 1;
+      }
+      const current = frames[searchIndex];
+      const next = frames[searchIndex + 1];
+      if (!next) return current;
+      return targetTime - current.t <= next.t - targetTime ? current : next;
+    }
+
+    async function drawDelayedFrame(frame) {
+      isDrawing = true;
+      try {
+        const bitmap = await createImageBitmap(frame.blob);
+        const canvasWidth = displayCanvas.width;
+        const canvasHeight = displayCanvas.height;
+        const scale = Math.max(canvasWidth / bitmap.width, canvasHeight / bitmap.height);
+        const drawWidth = bitmap.width * scale;
+        const drawHeight = bitmap.height * scale;
+        const x = (canvasWidth - drawWidth) / 2;
+        const y = (canvasHeight - drawHeight) / 2;
+
+        displayContext.save();
+        displayContext.clearRect(0, 0, canvasWidth, canvasHeight);
+        if (isMirrored) {
+          displayContext.translate(canvasWidth, 0);
+          displayContext.scale(-1, 1);
+          displayContext.drawImage(bitmap, canvasWidth - x - drawWidth, y, drawWidth, drawHeight);
+        } else {
+          displayContext.drawImage(bitmap, x, y, drawWidth, drawHeight);
+        }
+        displayContext.restore();
+        bitmap.close();
+      } finally {
+        isDrawing = false;
+      }
+    }
+
+    function updateBuffering(now) {
+      const elapsed = frames.length ? Math.max(0, now - bufferStartedAt) : 0;
+      const percent = Math.min(100, Math.floor(elapsed / (delaySeconds * 1000) * 100));
+      buffering.textContent = `ためています… ${percent}%`;
+      buffering.style.display = percent >= 100 ? 'none' : 'grid';
+      return percent >= 100;
+    }
+
+    function animationLoop(now) {
+      captureFrame(now);
+      const ready = updateBuffering(now);
+      if (ready && !isPaused && !isDrawing && now - lastDisplayTime >= CAPTURE_INTERVAL) {
+        lastDisplayTime = now;
+        const frame = findClosestFrame(now - delaySeconds * 1000);
+        if (frame) void drawDelayedFrame(frame);
+      }
+      requestAnimationFrame(animationLoop);
+    }
+
+    // §6 UI
+    startButton.addEventListener('click', async () => {
+      startButton.disabled = true;
+      errorMessage.hidden = true;
+      try {
+        await startCamera();
+        startScreen.style.display = 'none';
+        mainScreen.style.display = 'block';
+        fitDisplayCanvas();
+        void requestWakeLock();
+        if (!loopStarted) {
+          loopStarted = true;
+          requestAnimationFrame(animationLoop);
+        }
+      } catch (error) {
+        if (error.message === 'INSECURE') {
+          errorMessage.textContent = 'このページは https で開く必要があります';
+        } else {
+          errorMessage.textContent = 'カメラが使えませんでした。アドレスバーのカギ🔒マークからカメラを「許可」にして、ページを開き直してください';
+        }
+        errorMessage.hidden = false;
+        startButton.disabled = false;
+      }
+    });
+
+    function setDelay(seconds) {
+      delaySeconds = Math.min(30, Math.max(1, seconds));
+      searchIndex = 0;
+      delayButtons.forEach((button) => {
+        button.setAttribute('aria-pressed', String(Number(button.dataset.delay) === delaySeconds));
+      });
+      delayValue.textContent = `${delaySeconds}秒`;
+      delayBadge.textContent = `${delaySeconds}秒おくれ`;
+      delayMinusButton.disabled = delaySeconds === 1;
+      delayPlusButton.disabled = delaySeconds === 30;
+      updateBuffering(performance.now());
+    }
+
+    delayButtons.forEach((button) => {
+      button.addEventListener('click', () => setDelay(Number(button.dataset.delay)));
+    });
+
+    delayMinusButton.addEventListener('click', () => setDelay(delaySeconds - 1));
+    delayPlusButton.addEventListener('click', () => setDelay(delaySeconds + 1));
+
+    pauseButton.addEventListener('click', () => {
+      isPaused = !isPaused;
+      pauseButton.textContent = isPaused ? '▶' : '⏸';
+      pauseButton.setAttribute('aria-pressed', String(isPaused));
+      pauseButton.setAttribute('aria-label', isPaused ? '再開' : '一時停止');
+    });
+
+    mirrorButton.addEventListener('click', () => {
+      isMirrored = !isMirrored;
+      mirrorButton.setAttribute('aria-pressed', String(isMirrored));
+      mirrorBadge.hidden = !isMirrored;
+    });
+
+    liveButton.addEventListener('click', () => {
+      const isLiveVisible = livePreview.style.display === 'block';
+      livePreview.style.display = isLiveVisible ? 'none' : 'block';
+      liveButton.setAttribute('aria-pressed', String(!isLiveVisible));
+    });
+
+    cameraButton.addEventListener('click', async () => {
+      if (videoDevices.length < 2) return;
+      cameraButton.disabled = true;
+      currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+      try {
+        await startCamera(videoDevices[currentDeviceIndex].deviceId);
+      } catch {
+        errorMessage.textContent = 'カメラが使えませんでした。アドレスバーのカギ🔒マークからカメラを「許可」にして、ページを開き直してください';
+        errorMessage.hidden = false;
+        startScreen.style.display = 'grid';
+        mainScreen.style.display = 'none';
+        startButton.disabled = false;
+      } finally {
+        cameraButton.disabled = false;
+      }
+    });
+
+    window.addEventListener('resize', fitDisplayCanvas);
+
+    // §7 Wake Lock
+    async function requestWakeLock() {
+      try {
+        wakeLock = await navigator.wakeLock?.request('screen');
+      } catch {
+        wakeLock = null;
+      }
+    }
+
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible' && stream) void requestWakeLock();
+    });
+
+    // §8 SW登録
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('./sw.js').catch(() => {});
+    }
+  </script>
+</body>
+</html>
