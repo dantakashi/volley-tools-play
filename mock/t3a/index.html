@@ -5,431 +5,154 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#071b3a">
   <title>試合アシスタント モック</title>
-  <!--
-    目次
-    §1 基本・レイアウト
-    §2 得点カラム
-    §3 中央カラム
-    §4 モーダル・通知
-    §5 画面本体
-    §6 状態と描画
-    §7 得点・ローテーション
-    §8 選手交代
-    §9 戻す・やり直し
-  -->
   <style>
-    /* §1 基本・レイアウト */
-    :root {
-      color-scheme: dark;
-      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-      --bg: #071b3a; --panel: #0d2a52; --panel2: #123561; --line: #31547e;
-      --blue: #36a9ff; --blue2: #126ab0; --red: #ff6473; --red2: #a73143;
-      --muted: #acc2dc; --yellow: #ffd85e;
-    }
-    * { box-sizing: border-box; }
-    html, body { margin: 0; min-width: 900px; height: 100%; background: var(--bg); color: #fff; }
-    body { overflow: hidden; }
-    button { min-height: 48px; font: inherit; color: inherit; cursor: pointer; }
-    button:focus-visible { outline: 3px solid #ffe36e; outline-offset: 2px; }
-    button:disabled { cursor: default; opacity: .38; }
-    .mock-banner {
-      height: 24px; display: grid; place-items: center; background: #f0b429; color: #182231;
-      font-size: 12px; font-weight: 900; letter-spacing: .04em;
-    }
-    .topbar {
-      height: 56px; display: flex; align-items: center; justify-content: center; gap: 24px;
-      padding: 5px 16px; background: #0a2447; border-bottom: 1px solid var(--line);
-    }
-    .set-label { font-weight: 900; color: #dceafb; }
-    .score { min-width: 150px; text-align: center; font-size: 34px; line-height: 1; font-weight: 950; }
-    .score-part { display: inline-block; transition: color .2s, transform .2s; }
-    .score-part.bump { color: #8ed4ff; transform: scale(1.25); }
-    #theirScore.bump { color: #ff9ca7; }
-    .serve-badge { padding: 7px 14px; border-radius: 999px; background: #24598c; font-weight: 900; }
-    .app {
-      height: calc(100vh - 80px); display: grid; grid-template-columns: 28% 44% 28%;
-      overflow: hidden;
-    }
-    .side { min-width: 0; padding: 10px; display: flex; flex-direction: column; gap: 8px; }
-    .ours { background: rgba(18, 106, 176, .16); border-right: 1px solid #297ec0; }
-    .theirs { background: rgba(167, 49, 67, .14); border-left: 1px solid #9b4050; }
-    .side h1 { margin: 0; text-align: center; font-size: 20px; }
-
-    /* §2 得点カラム */
-    .actions { flex: 1; min-height: 0; display: grid; grid-auto-rows: minmax(48px, 1fr); gap: 8px; }
-    .action {
-      border: 0; border-radius: 11px; padding: 6px 12px; font-size: clamp(15px, 1.45vw, 20px);
-      line-height: 1.18; font-weight: 900;
-    }
-    .ours .action { background: var(--blue2); }
-    .theirs .action { background: var(--red2); }
-    .substitution-wrap { padding-top: 9px; border-top: 1px solid #5f7188; }
-    .substitution {
-      width: 100%; border: 1px solid #6f8299; border-radius: 11px; background: #354b64; font-weight: 900;
-    }
-
-    /* §3 中央カラム */
-    .center {
-      min-width: 0; padding: 9px 10px; display: grid; grid-template-rows: auto auto minmax(0, 1fr) auto;
-      gap: 8px; background: #081f40;
-    }
-    .card { border: 1px solid var(--line); border-radius: 11px; background: var(--panel); }
-    .section-title { margin: 0 0 6px; font-size: 15px; color: #d9e9fa; }
-    .rotation-card { position: relative; padding: 8px; transition: box-shadow .2s, border-color .2s; }
-    .rotation-card.flash { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(255,216,94,.35), 0 0 24px rgba(255,216,94,.25); }
-    .rotation-badge {
-      position: absolute; top: 7px; right: 8px; min-width: 40px; padding: 3px 8px;
-      border-radius: 999px; background: var(--blue); color: #061a37; text-align: center; font-weight: 950;
-    }
-    .net { margin: 0 48px 5px 0; border-top: 3px solid #f4f8fc; text-align: center; color: var(--muted); font-size: 10px; }
-    .court { display: grid; grid-template-columns: repeat(3, 1fr); grid-template-rows: repeat(2, 50px); gap: 5px; }
-    .court-player {
-      display: grid; place-items: center; padding: 2px; border: 1px solid #4385ba; border-radius: 7px;
-      background: #104875; text-align: center; font-size: 13px; font-weight: 900;
-    }
-    .court-player.libero-slot { border-color: #e2ac42; background: #6c541d; }
-    .court-player small { display: block; color: #f8dc95; font-size: 10px; line-height: 1.05; }
-    .libero-note { margin: 4px 0 0; color: var(--muted); text-align: center; font-size: 10px; }
-    .serve-order { padding: 7px 8px; }
-    .serve-chips { display: grid; grid-template-columns: repeat(6, 1fr); gap: 4px; }
-    .serve-chip {
-      position: relative; min-width: 0; min-height: 52px; display: grid; place-items: center; padding: 14px 2px 2px;
-      border: 1px solid #54779e; border-radius: 8px; background: #173b63; text-align: center;
-      font-size: 11px; font-weight: 900;
-    }
-    .serve-chip.active { border-color: #74c8ff; background: #165d92; box-shadow: inset 0 0 0 2px #36a9ff; }
-    .chip-badge {
-      position: absolute; top: 2px; left: 50%; transform: translateX(-50%); padding: 1px 5px;
-      border-radius: 999px; background: var(--yellow); color: #182231; white-space: nowrap; font-size: 9px;
-    }
-    .log-card { min-height: 0; display: flex; flex-direction: column; padding: 8px; }
-    .log { min-height: 0; overflow-y: auto; margin: 0; padding: 0; list-style: none; font-size: 13px; }
-    .log li { padding: 6px 7px; border-bottom: 1px solid rgba(80,116,154,.48); }
-    .log li.system { color: var(--yellow); font-weight: 800; }
-    .dot { font-size: 17px; vertical-align: -1px; }
-    .dot.our { color: var(--blue); } .dot.their { color: var(--red); }
-    .history-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .history-controls button { border: 1px solid #6687aa; border-radius: 10px; background: #173859; font-weight: 900; }
-
-    /* §4 モーダル・通知 */
-    .backdrop { position: fixed; z-index: 20; inset: 0; display: none; place-items: center; padding: 20px; background: rgba(0,8,23,.82); }
-    .backdrop.show { display: grid; }
-    .modal { width: min(860px, 94vw); padding: 18px; border: 1px solid #638bb5; border-radius: 15px; background: #0b274a; }
-    .modal h2 { margin: 0 0 6px; }
-    .modal-note { margin: 0 0 12px; color: var(--muted); }
-    .player-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; }
-    .player-choice { border: 1px solid #4385ba; border-radius: 10px; background: #104875; font-weight: 900; }
-    .player-choice .number { display: block; font-size: 21px; }
-    .modal-footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 12px; }
-    .modal-footer button { min-width: 100px; border: 0; border-radius: 9px; background: #354b64; font-weight: 900; }
-    #toast {
-      position: fixed; z-index: 30; left: 50%; bottom: 18px; transform: translate(-50%, 18px);
-      min-width: 330px; max-width: 90vw; padding: 13px 18px; border-radius: 10px; background: #fff;
-      color: #061a37; text-align: center; font-weight: 900; opacity: 0; pointer-events: none;
-      transition: opacity .18s, transform .18s;
-    }
-    #toast.show { opacity: 1; transform: translate(-50%, 0); }
+    :root{color-scheme:dark;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;--bg:#071b3a;--panel:#0d2a52;--line:#31547e;--blue:#36a9ff;--blue2:#126ab0;--red:#ff6473;--red2:#a73143;--muted:#acc2dc;--yellow:#ffd85e}
+    *{box-sizing:border-box}html,body{margin:0;min-width:900px;height:100%;background:var(--bg);color:#fff}body{overflow-x:auto;overflow-y:hidden}
+    button{min-height:44px;font:inherit;color:inherit;cursor:pointer}button:focus-visible{outline:3px solid #ffe36e;outline-offset:2px}button:disabled{cursor:default;opacity:.38}
+    .mock-banner{height:22px;display:grid;place-items:center;background:#f0b429;color:#182231;font-size:11px;font-weight:900}
+    .topbar{height:56px;display:flex;align-items:center;justify-content:center;gap:20px;padding:4px 16px;background:#0a2447;border-bottom:1px solid var(--line)}
+    .set-label{font-weight:900}.score{display:grid;grid-template-columns:auto auto auto auto auto;align-items:end;gap:8px;font-size:32px;font-weight:950}.score-team{font-size:13px}.our-color{color:var(--blue)}.their-color{color:var(--red)}
+    .score-part{display:inline-block}.score-part.bump{transform:scale(1.25)}.point-status{min-width:84px;color:var(--yellow);font-size:11px;text-align:center}
+    .serve-badge{padding:7px 13px;border-radius:999px;font-weight:900}.serve-badge.our{background:#176da9}.serve-badge.their{background:#a63b4b}
+    .help{min-width:42px;border:1px solid #6d8cac;border-radius:50%;background:#173859;font-weight:950}
+    .app{height:calc(100vh - 78px);min-width:900px;display:grid;grid-template-columns:28% 44% 28%;overflow:hidden}
+    .side{min-width:0;padding:8px;display:flex;flex-direction:column;gap:6px;transition:filter .2s}.ours{background:rgba(18,106,176,.19);border-right:1px solid #297ec0}.theirs{background:rgba(167,49,67,.18);border-left:1px solid #9b4050}.side.dim{filter:brightness(.9)}.side h1{margin:0;text-align:center;font-size:18px}
+    .actions{flex:1;min-height:0;display:grid;grid-template-rows:repeat(5,minmax(40px,1fr)) auto repeat(2,minmax(40px,1fr));gap:5px}
+    .action{border:0;border-radius:10px;padding:4px 9px;font-size:clamp(13px,1.25vw,18px);line-height:1.14;font-weight:900}.ours .action{background:var(--blue2)}.theirs .action{background:var(--red2)}
+    .action.secondary{border:1px solid #71869f;background:transparent}.action.unavailable{filter:grayscale(1);opacity:.38}.action-divider{border-top:1px solid #5f7188}
+    .center{min-width:0;min-height:0;padding:7px 8px;display:grid;grid-template-rows:auto auto minmax(0,1fr) auto;gap:6px;background:#081f40}
+    .card{border:1px solid var(--line);border-radius:10px;background:var(--panel)}.section-title{margin:0 0 4px;font-size:14px;color:#d9e9fa}
+    .rotation-card{position:relative;padding:6px}.rotation-card.flash{border-color:var(--yellow);box-shadow:0 0 0 3px rgba(255,216,94,.35)}
+    .rotation-badge{position:absolute;top:6px;right:7px;padding:2px 8px;border-radius:999px;background:var(--blue);color:#061a37;font-weight:950}
+    .court-wrap.reversed{direction:rtl}.court-wrap.reversed .court-player{direction:ltr}
+    .court-labels{display:grid;grid-template-columns:1fr 1fr;margin-bottom:3px;text-align:center;color:var(--muted);font-size:11px;font-weight:900}
+    .court{display:grid;grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(3,40px);gap:3px 5px;position:relative}
+    .court:after{content:"ネット";position:absolute;z-index:2;inset:0 auto 0 50%;display:grid;place-items:center;width:3px;transform:translateX(-50%);background:#f4f8fc;color:#597088;font-size:10px;writing-mode:vertical-rl}
+    .court-player{position:relative;display:grid;place-items:center;padding:9px 2px 2px;border:1px solid #4385ba;border-radius:7px;background:#104875;text-align:center;font-size:13px;font-weight:900}.court-player.their-player{border-color:#a55361;background:#682937}.court-player.net-left{margin-right:4px}.court-player.net-right{margin-left:4px}.court-player.libero-slot{border-color:#e2ac42;background:#6c541d}.court-player small{display:block;color:#f8dc95;font-size:10px}.position-number{position:absolute;top:1px;left:4px;color:rgba(255,255,255,.55);font-size:10px}
+    .court-notes{display:flex;justify-content:space-between;gap:8px;margin-top:3px;color:var(--muted);font-size:10px}.court-notes p{margin:0}
+    .serve-order{padding:6px}.serve-chips{display:grid;grid-template-columns:repeat(6,1fr);gap:4px}.serve-chip{position:relative;min-height:49px;display:grid;place-items:center;padding:14px 2px 2px;border:1px solid #54779e;border-radius:8px;background:#173b63;text-align:center;font-size:13px;font-weight:900}.serve-chip strong{font-size:15px}.serve-chip.active{border-color:#74c8ff;background:#165d92;box-shadow:inset 0 0 0 2px var(--blue)}.chip-badge{position:absolute;top:2px;left:50%;transform:translateX(-50%);padding:1px 4px;border-radius:999px;background:var(--yellow);color:#182231;white-space:nowrap;font-size:10px}
+    .log-card{min-height:0;display:flex;flex-direction:column;padding:6px}.log{min-height:0;overflow-y:auto;margin:0;padding:0;list-style:none;font-size:12px}.log li{padding:4px 6px;border-bottom:1px solid rgba(80,116,154,.48)}.log li.system{color:var(--yellow);font-weight:800}.dot.our{color:var(--blue)}.dot.their{color:var(--red)}
+    .operations{display:grid;gap:5px}.history-controls{display:grid;grid-template-columns:2fr 1fr;gap:5px}.operation-row{display:grid;grid-template-columns:repeat(4,1fr);gap:5px}.operations button{min-height:38px;border:1px solid #6687aa;border-radius:9px;background:#173859;font-size:12px;font-weight:900}.operations .dummy{filter:grayscale(1);opacity:.45}
+    .backdrop{position:fixed;z-index:20;inset:0;display:none;place-items:center;padding:20px;background:rgba(0,8,23,.84)}.backdrop.show{display:grid}.modal{width:min(820px,94vw);max-height:90vh;overflow:auto;padding:17px;border:1px solid #638bb5;border-radius:15px;background:#0b274a}.modal h2{margin:0 0 6px}.modal-note{margin:0 0 11px;color:var(--muted);white-space:pre-line}.player-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}.player-choice{border:1px solid #4385ba;border-radius:9px;background:#104875;font-weight:900}.player-choice .number{display:block;font-size:20px}.modal-footer{display:flex;justify-content:flex-end;gap:8px;margin-top:11px}.modal-footer button{border:0;border-radius:9px;background:#354b64;font-weight:900}.adjust-score{font-size:28px;text-align:center;font-weight:950}.adjust-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:9px}.help-copy{line-height:1.8}
+    #toast{position:fixed;z-index:40;left:50%;bottom:110px;transform:translate(-50%,18px);min-width:360px;max-width:90vw;padding:11px 16px;border-radius:10px;background:#fff;color:#061a37;text-align:center;font-weight:900;white-space:pre-line;opacity:0;pointer-events:none;transition:.18s}#toast.show{opacity:1;transform:translate(-50%,0)}
+    .set-overlay{position:fixed;z-index:30;inset:0;display:none;place-items:center;padding:20px;background:rgba(0,8,23,.92)}.set-overlay.show{display:grid}.set-panel{max-width:720px;padding:24px;border:1px solid #638bb5;border-radius:15px;background:#0b274a;text-align:center}.set-panel h2{margin:0 0 8px;font-size:27px}.set-panel p{color:var(--muted)}.set-panel button{margin:5px;border:1px solid #7995b2;border-radius:9px;background:#173859;font-weight:900}
   </style>
 </head>
 <body>
-  <!-- §5 画面本体 -->
   <div class="mock-banner">これはモックです。とじると消えます</div>
   <header class="topbar">
     <span class="set-label">セット1</span>
-    <div class="score" aria-label="スコア"><span id="ourScore" class="score-part">0</span> - <span id="theirScore" class="score-part">0</span></div>
-    <span id="serveBadge" class="serve-badge">🏐 相手のサーブ</span>
+    <div class="score" aria-label="スコア">
+      <span class="score-team our-color">うち</span><span id="ourScore" class="score-part our-color">0</span><span>-</span><span id="theirScore" class="score-part their-color">0</span><span class="score-team their-color">相手</span>
+    </div>
+    <span id="pointStatus" class="point-status"></span>
+    <span id="serveBadge" class="serve-badge their">🏐 相手のサーブ</span>
+    <button id="help" class="help" type="button" aria-label="ヘルプ">？</button>
   </header>
-  <main class="app">
-    <section class="side ours">
-      <h1>うちの得点</h1>
-      <div id="ourActions" class="actions"></div>
-    </section>
-
+  <main id="app" class="app">
+    <section id="ourSide" class="side ours"><h1>うちの得点</h1><div id="ourActions" class="actions"></div></section>
     <section class="center">
       <section id="rotationCard" class="card rotation-card">
-        <h2 class="section-title">いまのローテ</h2>
-        <span id="rotationBadge" class="rotation-badge">S1</span>
-        <div class="net">ネット側 ↑</div>
-        <div id="court" class="court"></div>
-        <p class="libero-note">リベロはサーブしません</p>
+        <h2 class="section-title">いまのローテ</h2><span id="rotationBadge" class="rotation-badge">ローテ 1</span>
+        <div id="courtWrap" class="court-wrap"><div class="court-labels"><span>うち</span><span>相手</span></div><div id="court" class="court"></div></div>
+        <div class="court-notes"><p>リベロは #10 がP5・P6にいる間だけ入ります（かんたん表示）</p><p>相手番号の変更は本実装で<br>相手リベロは表示に出ません</p></div>
       </section>
-      <section class="card serve-order">
-        <h2 class="section-title">サーブ順</h2>
-        <div id="serveChips" class="serve-chips"></div>
-      </section>
-      <section class="card log-card">
-        <h2 class="section-title">試合ログ</h2>
-        <ol id="log" class="log" aria-live="polite"></ol>
-      </section>
-      <div class="history-controls">
-        <button id="undo" type="button" disabled>↩ 戻す</button>
-        <button id="redo" type="button" disabled>↪ やり直し</button>
+      <section class="card serve-order"><h2 class="section-title">サーブ順</h2><div id="serveChips" class="serve-chips"></div></section>
+      <section class="card log-card"><h2 class="section-title">試合ログ</h2><ol id="log" class="log" aria-live="polite"></ol></section>
+      <div class="operations">
+        <div class="history-controls"><button id="undo" type="button" disabled>↩ 1つ戻す</button><button id="redo" type="button" disabled>↪ 戻すのを取消</button></div>
+        <div class="operation-row"><button id="substitution" type="button">🔁 選手交代</button><button id="timeout" class="dummy" type="button">⏱ タイムアウト</button><button id="adjust" type="button">🔧 スコア合わせ</button><button id="reverse" type="button">⇄ コート左右</button></div>
       </div>
     </section>
-
-    <section class="side theirs">
-      <h1>相手の得点</h1>
-      <div id="theirActions" class="actions"></div>
-      <div class="substitution-wrap"><button id="substitution" class="substitution" type="button">🔁 選手交代</button></div>
-    </section>
+    <section id="theirSide" class="side theirs"><h1>相手の得点</h1><div id="theirActions" class="actions"></div></section>
   </main>
-
+  <div id="setOverlay" class="set-overlay" role="dialog" aria-modal="true" aria-labelledby="setEndText" aria-describedby="setEndNote"><div class="set-panel"><h2 id="setEndText"></h2><p id="setEndNote">本実装ではここでセット記録→コートチェンジ→次セットの並び入力になります</p><button id="continue" type="button">つづける（デモ用）</button><button id="overlayUndo" type="button">↩ 1つ戻す</button></div></div>
   <div id="modalBackdrop" class="backdrop" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
-    <section class="modal">
-      <h2 id="modalTitle"></h2>
-      <p id="modalNote" class="modal-note"></p>
-      <div id="modalGrid" class="player-grid"></div>
-      <div class="modal-footer"><button id="modalClose" type="button">閉じる</button></div>
-    </section>
+    <section class="modal"><h2 id="modalTitle"></h2><p id="modalNote" class="modal-note"></p><div id="modalGrid" class="player-grid"></div><div class="modal-footer"><button id="noPlayer" type="button">だれか選べない（選手なしで記録）</button><button id="modalClose" type="button">やめる（記録しない）</button></div></section>
   </div>
   <div id="toast" role="status" aria-live="polite"></div>
-
   <script>
     'use strict';
-
-    // §6 状態と描画
-    const players = {
-      1:'はると', 2:'そうた', 3:'ゆうき', 4:'りく', 5:'いつき', 6:'あおい',
-      7:'れん', 8:'かなた', 9:'だいち', 10:'みなと', 11:'こうき', 12:'たくみ'
-    };
-    const initialState = {
-      ourScore: 0, theirScore: 0, ourServe: false, rotation: 1,
-      order: [4, 9, 12, 1, 5, 10], bench: [2, 3, 6, 8, 11], logs: []
-    };
-    const clone = value => JSON.parse(JSON.stringify(value));
-    let state = clone(initialState);
-    let undoStack = [];
-    let redoStack = [];
-    let pendingScore = null;
-    let substitutionOut = null;
-    let toastTimer = 0;
-
-    const $ = selector => document.querySelector(selector);
-    const label = number => `#${number}${players[number]}`;
-
-    function showToast(message) {
-      clearTimeout(toastTimer);
-      $('#toast').textContent = message;
-      $('#toast').classList.add('show');
-      toastTimer = setTimeout(() => $('#toast').classList.remove('show'), 1500);
+    const players={1:'はると',2:'そうた',3:'ゆうき',4:'りく',5:'いつき',6:'あおい',7:'れん',8:'かなた',9:'だいち',10:'みなと',11:'こうき',12:'たくみ'};
+    const actions=[
+      {id:'attack_win',label:'アタック決定',side:'our',requiresServe:null,playerMode:'select',log:'アタック決定'},
+      {id:'block',label:'ブロック',side:'our',requiresServe:null,playerMode:'frontRow',log:'ブロック'},
+      {id:'serve_ace',label:'サーブエース',side:'our',requiresServe:'our',playerMode:'server',log:'サーブエース'},
+      {id:'their_serve_miss',label:'相手のサーブミス',side:'our',requiresServe:'their',playerMode:'none',log:'相手のサーブミス'},
+      {id:'their_error',label:'相手のミス',side:'our',requiresServe:null,playerMode:'none',log:'相手のミス'},
+      {id:'our_other',label:'その他で得点',side:'our',requiresServe:null,playerMode:'none',log:'その他で得点'},
+      {id:'our_missed',label:'見逃した',side:'our',requiresServe:null,playerMode:'none',log:'得点のみ記録（見逃し）'},
+      {id:'their_win',label:'相手に決められた',side:'their',requiresServe:null,playerMode:'none',log:'相手に決められた'},
+      {id:'our_attack_error',label:'うちのアタックミス',side:'their',requiresServe:null,playerMode:'select',log:'うちのアタックミス'},
+      {id:'blocked',label:'ブロックされた',side:'their',requiresServe:null,playerMode:'select',log:'ブロックされた'},
+      {id:'receive_error',label:'うちのレシーブ・つなぎミス',side:'their',requiresServe:null,playerMode:'select',log:'うちのレシーブ・つなぎミス'},
+      {id:'our_serve_miss',label:'うちのサーブミス',side:'their',requiresServe:'our',playerMode:'server',log:'うちのサーブミス'},
+      {id:'their_other',label:'その他で得点',side:'their',requiresServe:null,playerMode:'none',log:'その他で得点'},
+      {id:'their_missed',label:'見逃した',side:'their',requiresServe:null,playerMode:'none',log:'得点のみ記録（見逃し）'}
+    ];
+    const initialState={ourScore:0,theirScore:0,ourServe:false,rotation:1,oppRotation:1,order:[4,9,12,1,5,10],opponentOrder:[13,2,11,5,9,3],bench:[2,3,6,8,11],liberoPartner:10,logs:[],events:[],seq:0};
+    const clone=v=>JSON.parse(JSON.stringify(v));const $=s=>document.querySelector(s);const label=n=>`#${n}${players[n]}`;
+    let state=clone(initialState),undoStack=[],redoStack=[],modalOrigin=null,modalCancel=null,modalNoPlayer=null,modalKind='score',toastTimer=0,lastPointAt=0,courtReversed=false,setDismissed=false,setOverlayOpen=false,setOverlayOrigin=null;
+    const timers={score:0,rotation:0};
+    function showToast(message){clearTimeout(toastTimer);$('#toast').textContent=message;$('#toast').classList.add('show');toastTimer=setTimeout(()=>$('#toast').classList.remove('show'),1900)}
+    function commit(description,mutator,flashSide){const before=clone(state);try{mutator()}catch(error){state=before;throw error}undoStack.push({state:before,description});redoStack=[];render(flashSide)}
+    function onCourt(){return state.order.map((n,i)=>n===state.liberoPartner&&(i===4||i===5)?7:n)}
+    function actionAvailable(a){return !a.requiresServe||(a.requiresServe==='our')===state.ourServe}
+    function unavailableMessage(a){if(a.id==='serve_ace')return"サーブエースはうちのサーブのとき用だよ。相手のサーブがミスになったら左の『相手のサーブミス』を押してね";if(a.id==='their_serve_miss')return"いまはうちのサーブだよ。うちのサーブが入らなかったときは右の『うちのサーブミス』";return"いまは相手のサーブだよ。相手のサーブがミスになったら左の『相手のサーブミス』"}
+    function initActions(){
+      for(const side of ['our','their']){const root=$(`#${side}Actions`);actions.filter(a=>a.side===side).forEach((a,i)=>{if(i===5){const d=document.createElement('div');d.className='action-divider';root.append(d)}const b=document.createElement('button');b.type='button';b.className='action'+(i>=5?' secondary':'');b.textContent=a.label;b.dataset.actionId=a.id;b.addEventListener('click',()=>beginScore(a,b));root.append(b)})}
     }
-
-    function commit(mutator) {
-      undoStack.push(clone(state));
-      redoStack = [];
-      mutator();
-      render();
+    function renderActions(){document.querySelectorAll('[data-action-id]').forEach(b=>{const a=actions.find(x=>x.id===b.dataset.actionId);b.classList.toggle('unavailable',!actionAvailable(a));b.setAttribute('aria-disabled',String(!actionAvailable(a)))})}
+    function renderCourt(){
+      const cells=[['our',5,4],['our',4,3],['their',2,1],['their',1,0],['our',6,5],['our',3,2],['their',3,2],['their',6,5],['our',1,0],['our',2,1],['their',4,3],['their',5,4]];
+      $('#court').replaceChildren(...cells.map(([side,pos,index])=>{const n=side==='our'?state.order[index]:state.opponentOrder[index],lib=side==='our'&&n===state.liberoPartner&&(pos===5||pos===6);const box=document.createElement('div');box.className=`court-player${side==='their'?' their-player':''}${lib?' libero-slot':''}${pos>=2&&pos<=4?(side==='our'?' net-left':' net-right'):''}`;const p=document.createElement('span');p.className='position-number';p.textContent=`P${pos}`;box.append(p);if(lib){box.append(document.createTextNode('#7れん(L)'));const small=document.createElement('small');small.textContent=`⇄ ${label(n)}`;box.append(small)}else box.append(document.createTextNode(`${side==='our'?label(n):`#${n}`}${((side==='our'&&state.ourServe)||(side==='their'&&!state.ourServe))&&pos===1?' 🏐':''}`));return box}))
     }
-
-    function courtNumbers() {
-      return [state.order[1], state.order[2], state.order[3], state.order[0], state.order[5], state.order[4]];
+    function renderServeOrder(){const marked=state.ourServe?state.order[0]:state.order[1];$('#serveChips').replaceChildren(...state.order.map(n=>{const chip=document.createElement('div');chip.className=`serve-chip${n===marked?' active':''}`;if(n===marked){const badge=document.createElement('span');badge.className='chip-badge';badge.textContent=state.ourServe?'🏐サーブ中':'🏐つぎ';chip.append(badge)}const strong=document.createElement('strong');strong.textContent=`#${n}`;chip.append(strong,document.createTextNode(players[n]));return chip}))}
+    function renderLog(){const root=$('#log'),keepTop=root.scrollTop<10;root.replaceChildren(...state.logs.map(e=>{const li=document.createElement('li');if(e.system){li.className='system';li.textContent=e.text}else{li.append(document.createTextNode(`${e.score} `));const dot=document.createElement('span');dot.className=`dot ${e.side}`;dot.textContent=e.side==='our'?'●':'○';li.append(dot,document.createTextNode(` ${e.text}`))}return li}));if(keepTop)root.scrollTop=0}
+    function setEnded(){return Math.max(state.ourScore,state.theirScore)>=25&&Math.abs(state.ourScore-state.theirScore)>=2}
+    function pointStatus(){const a=state.ourScore,b=state.theirScore;if(setEnded())return'';if(a>=24&&b>=24&&a===b)return'デュース';if(a>=24&&a-b>=1)return'うち セットポイント';if(b>=24&&b-a>=1)return'相手 セットポイント';return''}
+    function syncInert(){
+      const modalOpen=$('#modalBackdrop').classList.contains('show'),setOpen=$('#setOverlay').classList.contains('show');
+      for(const el of [$('.mock-banner'),$('.topbar'),$('#app')])el.inert=modalOpen||setOpen;
+      $('#modalBackdrop').inert=setOpen;
     }
-
-    function currentServer() { return state.order[0]; }
-
-    function renderActions() {
-      const our = [
-        ['アタック決定', true], ['ブロック', true], ['相手のミス', false]
-      ];
-      const their = [
-        ['相手に決められた', false], ['アタックのミス', true], ['レシーブ・つなぎのミス', true]
-      ];
-      if (state.ourServe) {
-        our.push(['サーブエース', false]);
-        their.push(['サーブミス', false]);
-      }
-      const fill = (root, actions, side) => {
-        root.replaceChildren(...actions.map(([name, needsPlayer]) => {
-          const button = document.createElement('button');
-          button.type = 'button';
-          button.className = 'action';
-          button.textContent = name;
-          button.addEventListener('click', () => beginScore(side, name, needsPlayer));
-          return button;
-        }));
-      };
-      fill($('#ourActions'), our, 'our');
-      fill($('#theirActions'), their, 'their');
+    function restoreSetOverlayFocus(){
+      const target=setOverlayOrigin&&setOverlayOrigin.isConnected&&!setOverlayOrigin.disabled&&!setOverlayOrigin.closest('[inert]')?setOverlayOrigin:$('#undo');
+      setOverlayOrigin=null;requestAnimationFrame(()=>target.focus());
     }
-
-    function renderCourt() {
-      const numbers = courtNumbers();
-      $('#court').replaceChildren(...numbers.map((number, index) => {
-        const box = document.createElement('div');
-        const liberoSlot = index === 4;
-        box.className = `court-player${liberoSlot ? ' libero-slot' : ''}`;
-        if (liberoSlot) {
-          box.innerHTML = `<span>#7 れん (L)<small>⇄ ${label(number)}</small></span>`;
-        } else {
-          box.textContent = label(number);
-        }
-        return box;
-      }));
+    function render(flashSide){
+      $('#ourScore').textContent=state.ourScore;$('#theirScore').textContent=state.theirScore;$('#pointStatus').textContent=pointStatus();$('#serveBadge').textContent=state.ourServe?'🏐 うちのサーブ':'🏐 相手のサーブ';$('#serveBadge').className=`serve-badge ${state.ourServe?'our':'their'}`;$('#ourSide').classList.toggle('dim',!state.ourServe);$('#theirSide').classList.toggle('dim',state.ourServe);$('#rotationBadge').textContent=`ローテ ${state.rotation}`;$('#undo').disabled=!undoStack.length;$('#redo').disabled=!redoStack.length;renderActions();renderCourt();renderServeOrder();renderLog();$('#courtWrap').classList.toggle('reversed',courtReversed);
+      if(!setEnded())setDismissed=false;$('#setEndText').textContent=`セット終了 ${state.ourScore>state.theirScore?'とった！':'とられた'} ${state.ourScore}-${state.theirScore}`;const shouldShow=setEnded()&&!setDismissed;if(shouldShow&&!setOverlayOpen)setOverlayOrigin=document.activeElement;$('#setOverlay').classList.toggle('show',shouldShow);if(shouldShow!==setOverlayOpen){const wasOpen=setOverlayOpen;setOverlayOpen=shouldShow;syncInert();if(shouldShow)requestAnimationFrame(()=>$('#continue').focus());else if(wasOpen)restoreSetOverlayFocus()}
+      updateAdjustDisplay();
+      if(flashSide){const el=flashSide==='our'?$('#ourScore'):$('#theirScore');clearTimeout(timers.score);el.classList.remove('bump');void el.offsetWidth;el.classList.add('bump');timers.score=setTimeout(()=>el.classList.remove('bump'),320)}
     }
-
-    function renderServeOrder() {
-      const active = currentServer();
-      $('#serveChips').replaceChildren(...state.order.map(number => {
-        const chip = document.createElement('div');
-        chip.className = `serve-chip${number === active ? ' active' : ''}`;
-        const badge = document.createElement('span');
-        badge.className = 'chip-badge';
-        badge.textContent = state.ourServe && number === active ? '🏐サーブ中' : (!state.ourServe && number === active ? '🏐つぎ' : '');
-        if (badge.textContent) chip.append(badge);
-        chip.append(document.createTextNode(label(number)));
-        return chip;
-      }));
+    function openModal({title,note,numbers=[],onChoose,noPlayer=null,content=null,onCancel=null,kind='score',preserveOrigin=false,choiceLabel=null}){
+      if(!preserveOrigin)modalOrigin=document.activeElement;modalKind=kind;modalCancel=onCancel;modalNoPlayer=noPlayer;$('#modalTitle').textContent=title;$('#modalNote').textContent=note;const grid=$('#modalGrid');grid.className='player-grid';grid.replaceChildren();
+      if(content)content(grid);else numbers.forEach(n=>{const b=document.createElement('button');b.type='button';b.className='player-choice';const num=document.createElement('span');num.className='number';num.textContent=`#${n}`;b.append(num,document.createTextNode(choiceLabel?choiceLabel(n):`${players[n]}${n===7?'（リベロ）':''}`));b.addEventListener('click',()=>onChoose(n));grid.append(b)});
+      $('#noPlayer').hidden=!noPlayer;$('#modalClose').textContent=kind==='info'?'とじる':'やめる（記録しない）';$('#modalBackdrop').classList.add('show');syncInert();requestAnimationFrame(()=>{const first=grid.querySelector('button');if(first)first.focus();else $('#modalClose').focus()})
     }
-
-    function renderLog() {
-      $('#log').replaceChildren(...state.logs.map(entry => {
-        const item = document.createElement('li');
-        if (entry.system) {
-          item.className = 'system';
-          item.textContent = entry.text;
-        } else {
-          item.innerHTML = `${entry.score} <span class="dot ${entry.side}">${entry.side === 'our' ? '●' : '○'}</span> ${entry.text}`;
-        }
-        return item;
-      }));
-      $('#log').scrollTop = 0;
+    function closeModal(cancelled=false){if(!$('#modalBackdrop').classList.contains('show'))return;$('#modalBackdrop').classList.remove('show');syncInert();const origin=modalOrigin,cancel=modalCancel;modalOrigin=null;modalCancel=null;modalNoPlayer=null;if(cancelled){cancel?.();showToast('記録していません（点は入っていません）')}origin?.focus()}
+    function scoreBlocked(){if(setEnded()&&!setDismissed){showToast('セットが終わっています。つづける か 戻す を選んでね');return true}return false}
+    function beginScore(a,origin){if(scoreBlocked())return;if(!actionAvailable(a)){showToast(unavailableMessage(a));return}if(Date.now()-lastPointAt<400){showToast('もう記録したよ');return}if(a.playerMode==='none'||a.playerMode==='server'){recordScore(a,a.playerMode==='server'?state.order[0]:null,origin);return}const nums=a.playerMode==='frontRow'?state.order.slice(1,4):(['attack_win','blocked','our_attack_error'].includes(a.id)?onCourt().filter(n=>n!==7):onCourt());openModal({title:`${a.label}：選手を選んでください`,note:a.playerMode==='frontRow'?'ネットの前にいる3人（ブロックできるのはこの3人）':'いまコートにいる選手',numbers:nums,onChoose:n=>{closeModal();recordScore(a,n,origin)},noPlayer:()=>{closeModal();recordScore(a,null,origin)}})}
+    function recordScore(a,player,origin){
+      if(scoreBlocked())return;if(Date.now()-lastPointAt<400){showToast('もう記録したよ');return}lastPointAt=Date.now();const wasOurServe=state.ourServe,ourRot=state.rotation,oppRot=state.oppRotation;let rotated=false;const sideDetail=a.id==='our_other'?'（うち+1）':a.id==='their_other'?'（相手+1）':'';const detail=a.id.endsWith('missed')?`得点のみ記録（見逃し・${a.side==='our'?'うち':'相手'}+1）`:`${a.log}${sideDetail}${player?` ${label(player)}`:''}`;
+      const servingPlayer=wasOurServe?state.order[0]:state.opponentOrder[0];
+      // point/sub=ラリー時点（適用前）の値・serve_adjust=補正後の値
+      commit(detail,()=>{if(a.side==='our'){state.ourScore++;if(!wasOurServe){state.order.push(state.order.shift());state.rotation=state.rotation%6+1;rotated=true}state.ourServe=true}else{state.theirScore++;if(wasOurServe){state.opponentOrder.push(state.opponentOrder.shift());state.oppRotation=state.oppRotation%6+1;rotated=true}state.ourServe=false}
+        state.logs.unshift({system:false,side:a.side,score:`${state.ourScore}-${state.theirScore}`,text:detail});if(!wasOurServe&&a.side==='our')state.logs.unshift({system:true,text:`— サーブ権がうちに！ ローテを回す → ローテ${state.rotation} ／ つぎのサーブ: ${label(state.order[0])}`});if(wasOurServe&&a.side==='their')state.logs.unshift({system:true,text:`— 相手のローテが回った（相手のつぎのサーブ: #${state.opponentOrder[0]}）`});state.events.push({seq:++state.seq,type:'point',side:a.side,actionId:a.id,player,serveSide:wasOurServe?'our':'their',serverNo:servingPlayer,ourRot,oppRot,scoreAfter:[state.ourScore,state.theirScore]})},a.side);
+      if(rotated&&a.side==='our'){clearTimeout(timers.rotation);$('#rotationCard').classList.add('flash');timers.rotation=setTimeout(()=>$('#rotationCard').classList.remove('flash'),1000)}showToast(`${detail}\nうち ${state.ourScore}-${state.theirScore}・つぎは${state.ourServe?'うち':'相手'}サーブ`);requestAnimationFrame(()=>{if(!$('#setOverlay').classList.contains('show'))origin?.focus()})
     }
-
-    function render(flashSide) {
-      $('#ourScore').textContent = state.ourScore;
-      $('#theirScore').textContent = state.theirScore;
-      $('#serveBadge').textContent = state.ourServe ? '🏐 うちのサーブ' : '🏐 相手のサーブ';
-      $('#rotationBadge').textContent = `S${state.rotation}`;
-      $('#undo').disabled = undoStack.length === 0;
-      $('#redo').disabled = redoStack.length === 0;
-      renderActions();
-      renderCourt();
-      renderServeOrder();
-      renderLog();
-      if (flashSide) {
-        const score = flashSide === 'our' ? $('#ourScore') : $('#theirScore');
-        score.classList.remove('bump');
-        void score.offsetWidth;
-        score.classList.add('bump');
-        setTimeout(() => score.classList.remove('bump'), 320);
-      }
-    }
-
-    function openModal(title, note, numbers, onChoose) {
-      $('#modalTitle').textContent = title;
-      $('#modalNote').textContent = note;
-      $('#modalGrid').replaceChildren(...numbers.map(number => {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'player-choice';
-        button.innerHTML = `<span class="number">#${number}</span>${players[number]}${number === 7 ? '（リベロ）' : ''}`;
-        button.addEventListener('click', () => onChoose(number));
-        return button;
-      }));
-      $('#modalBackdrop').classList.add('show');
-    }
-
-    function closeModal() {
-      $('#modalBackdrop').classList.remove('show');
-      pendingScore = null;
-      substitutionOut = null;
-    }
-
-    // §7 得点・ローテーション
-    function beginScore(side, action, needsPlayer) {
-      if (!needsPlayer) {
-        const automaticPlayer = action === 'サーブエース' || action === 'サーブミス' ? currentServer() : null;
-        recordScore(side, action, automaticPlayer);
-        return;
-      }
-      pendingScore = { side, action };
-      const onCourt = [...state.order, 7];
-      openModal(`${action}：選手を選んでください`, 'いまコートにいる7人だけを表示しています', onCourt, number => {
-        const pending = pendingScore;
-        closeModal();
-        recordScore(pending.side, pending.action, number);
-      });
-    }
-
-    function recordScore(side, action, playerNumber) {
-      const wasOpponentServe = !state.ourServe;
-      let rotated = false;
-      commit(() => {
-        if (side === 'our') {
-          state.ourScore += 1;
-          if (wasOpponentServe) {
-            state.order.push(state.order.shift());
-            state.rotation = state.rotation % 6 + 1;
-            rotated = true;
-          }
-          state.ourServe = true;
-        } else {
-          state.theirScore += 1;
-          state.ourServe = false;
-        }
-        const who = playerNumber ? ` ${label(playerNumber)}` : '';
-        state.logs.unshift({
-          system: false, side,
-          score: `${state.ourScore}-${state.theirScore}`,
-          text: `${action}${who}`
-        });
-        if (rotated) {
-          state.logs.unshift({
-            system: true,
-            text: `— サイドアウト！ ローテを回す → S${state.rotation} ／ つぎのサーブ: ${label(currentServer())}`
-          });
-        }
-      });
-      if (rotated) {
-        $('#rotationCard').classList.add('flash');
-        setTimeout(() => $('#rotationCard').classList.remove('flash'), 1000);
-      }
-      render(side);
-      showToast(`記録: ${action}${playerNumber ? ` ${label(playerNumber)}` : ''}`);
-    }
-
-    // §8 選手交代
-    function beginSubstitution() {
-      openModal('コートから出る選手', 'リベロ交代はこのモックの対象外です', state.order, outNumber => {
-        substitutionOut = outNumber;
-        openModal('入る選手', 'ベンチの選手だけを表示しています', state.bench, inNumber => {
-          const out = substitutionOut;
-          closeModal();
-          commit(() => {
-            const orderIndex = state.order.indexOf(out);
-            const benchIndex = state.bench.indexOf(inNumber);
-            state.order[orderIndex] = inNumber;
-            state.bench[benchIndex] = out;
-            state.logs.unshift({ system: true, text: `— 交代: ${label(out)} → ${label(inNumber)}` });
-          });
-          showToast(`交代: ${label(out)} → ${label(inNumber)}`);
-        });
-      });
-    }
-
-    // §9 戻す・やり直し
-    function undo() {
-      if (!undoStack.length) return;
-      redoStack.push(clone(state));
-      state = undoStack.pop();
-      render();
-      showToast('1つ前の状態に戻しました');
-    }
-    function redo() {
-      if (!redoStack.length) return;
-      undoStack.push(clone(state));
-      state = redoStack.pop();
-      render();
-      showToast('やり直しました');
-    }
-
-    $('#substitution').addEventListener('click', beginSubstitution);
-    $('#undo').addEventListener('click', undo);
-    $('#redo').addEventListener('click', redo);
-    $('#modalClose').addEventListener('click', closeModal);
-    $('#modalBackdrop').addEventListener('click', event => { if (event.target === $('#modalBackdrop')) closeModal(); });
-    document.addEventListener('keydown', event => { if (event.key === 'Escape') closeModal(); });
-    render();
+    function beginSubstitution(){openModal({title:'コートから出る選手',note:'リベロ交代はこのモックの対象外です\n交代回数などの規則チェックは本実装で',numbers:state.order,choiceLabel:n=>`${players[n]}${n===10&&onCourt().includes(7)?'（いまは#7れんが入っています）':''}`,onChoose:out=>openModal({title:'入る選手',note:'ベンチの選手だけを表示しています\n交代回数などの規則チェックは本実装で',numbers:state.bench,preserveOrigin:true,onChoose:inside=>{closeModal();const detail=`交代 ${label(out)}→${label(inside)}`,serverNo=state.ourServe?state.order[0]:state.opponentOrder[0],partnerOut=out===state.liberoPartner;commit(detail,()=>{const oi=state.order.indexOf(out),bi=state.bench.indexOf(inside);state.order[oi]=inside;state.bench[bi]=out;state.logs.unshift({system:true,text:`— 交代: ${label(out)} → ${label(inside)}`});state.events.push({seq:++state.seq,type:'sub',side:'our',actionId:'substitution',player:{out,in:inside},serveSide:state.ourServe?'our':'their',serverNo,ourRot:state.rotation,oppRot:state.oppRotation,scoreAfter:[state.ourScore,state.theirScore]})});showToast(partnerOut?'リベロの相方が下がったので、リベロ表示はお休みします':detail)}})})}
+    function updateAdjustDisplay(){const score=$('#adjustCurrent'),serve=$('#adjustServe');if(score)score.textContent=`うち ${state.ourScore}-${state.theirScore} 相手`;if(serve)serve.textContent=`いまのサーブ: ${state.ourServe?'うち':'相手'} ⇄`}
+    function openAdjust(){openModal({kind:'info',title:'スコア合わせ',note:'審判の掲示と合わせます。ローテは動きません。',content:grid=>{grid.className='adjust-grid';const score=document.createElement('div');score.id='adjustCurrent';score.className='adjust-score';score.style.gridColumn='1/-1';grid.append(score);[['うち +1','our',1],['うち −1','our',-1],['相手 +1','their',1],['相手 −1','their',-1]].forEach(([text,side,delta])=>{const b=document.createElement('button');b.type='button';b.className='player-choice';b.textContent=text;b.addEventListener('click',()=>adjustScore(side,delta));grid.append(b)});const serve=document.createElement('button');serve.id='adjustServe';serve.type='button';serve.className='player-choice';serve.style.gridColumn='1/-1';serve.addEventListener('click',adjustServe);grid.append(serve);updateAdjustDisplay()}})}
+    function adjustScore(side,delta){const before=`${state.ourScore}-${state.theirScore}`;if((side==='our'?state.ourScore:state.theirScore)+delta<0){showToast('0点より下にはできません');return}const afterOur=state.ourScore+(side==='our'?delta:0),afterTheir=state.theirScore+(side==='their'?delta:0),detail=`スコア調整 ${before} → ${afterOur}-${afterTheir}`;commit(detail,()=>{state.ourScore=afterOur;state.theirScore=afterTheir;state.logs.unshift({system:true,text:`— ${detail}（審判に合わせた）`});state.events.push({seq:++state.seq,type:'adjust',side,actionId:'score_adjust',delta,player:null,serveSide:state.ourServe?'our':'their',serverNo:state.ourServe?state.order[0]:state.opponentOrder[0],ourRot:state.rotation,oppRot:state.oppRotation,scoreAfter:[state.ourScore,state.theirScore]})});updateAdjustDisplay();showToast(detail)}
+    function adjustServe(){const detail=`サーブ権を手動で修正 → ${state.ourServe?'相手':'うち'}のサーブ`;commit(detail,()=>{state.ourServe=!state.ourServe;state.logs.unshift({system:true,text:`— ${detail}`});state.events.push({seq:++state.seq,type:'adjust',side:state.ourServe?'our':'their',actionId:'serve_adjust',player:null,serveSide:state.ourServe?'our':'their',serverNo:state.ourServe?state.order[0]:state.opponentOrder[0],ourRot:state.rotation,oppRot:state.oppRotation,scoreAfter:[state.ourScore,state.theirScore]})});updateAdjustDisplay();showToast(detail)}
+    function undo(){if(!undoStack.length)return;const entry=undoStack.pop();redoStack.push({state:clone(state),description:entry.description});state=entry.state;if(!setEnded())setDismissed=false;render();showToast(`取り消し: ${entry.description}`)}
+    function redo(){if(!redoStack.length)return;const entry=redoStack.pop();undoStack.push({state:clone(state),description:entry.description});state=entry.state;render();showToast(`復活: ${entry.description}`)}
+    initActions();$('#substitution').addEventListener('click',beginSubstitution);$('#timeout').addEventListener('click',()=>showToast('タイムアウトは本実装で作ります（置き場所だけ確保）'));$('#adjust').addEventListener('click',openAdjust);$('#reverse').addEventListener('click',()=>{courtReversed=!courtReversed;render();showToast('コート表示を左右いれかえました')});$('#undo').addEventListener('click',undo);$('#redo').addEventListener('click',redo);$('#overlayUndo').addEventListener('click',undo);$('#continue').addEventListener('click',()=>{setDismissed=true;render()});
+    $('#help').addEventListener('click',()=>openModal({kind:'info',title:'記録の割り切りルール',note:'・サーブで相手がくずれて落ちたら全部「サーブエース」\n・うちのアタックが止められたら「ブロックされた」\n・ボールにさわれず決められたら「相手に決められた」\n・さわってからのミスは「うちのレシーブ・つなぎミス」\n・相手のサーブがネットやアウト→「相手のサーブミス」（それ以外の相手の反則・アウトは「相手のミス」）\n・うちの反則（ダブルコンタクトなど）は「その他で得点」（相手の列）\n・スコアがズレて、どっちの点か分かるなら「見逃した」、分からないときは🔧スコア合わせ\n・迷ったら近い方でOK。スコアは正しく入るし、あとで直せる\n・さいしょのサーブがうちのときは、🔧スコア合わせの『いまのサーブ』で切りかえてね'}));
+    $('#modalClose').addEventListener('click',()=>closeModal(modalKind==='score'));$('#noPlayer').addEventListener('click',()=>modalNoPlayer?.());$('#modalBackdrop').addEventListener('click',e=>{if(e.target===$('#modalBackdrop'))closeModal(modalKind==='score')});document.addEventListener('keydown',e=>{const setOpen=$('#setOverlay').classList.contains('show'),modalOpen=$('#modalBackdrop').classList.contains('show');if(e.key==='Escape'&&modalOpen&&!setOpen)closeModal(modalKind==='score');if(e.key==='Tab'&&(modalOpen||setOpen)){const root=setOpen?$('#setOverlay'):$('#modalBackdrop'),items=[...root.querySelectorAll('button:not([hidden])')];if(!items.length)return;const first=items[0],last=items.at(-1);if(e.shiftKey&&document.activeElement===first){e.preventDefault();last.focus()}else if(!e.shiftKey&&document.activeElement===last){e.preventDefault();first.focus()}}});
+    window.mockState=()=>state;render();
   </script>
 </body>
 </html>
