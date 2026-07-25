@@ -1,10 +1,11 @@
-const CACHE = 'learn-v1';
+const CACHE = 'learn-v2';
 const ASSETS = [
   './',
   './index.html',
   './content_u1.js',
   './content_u2.js',
   './content_u3.js',
+  './content_u4.js',
   './manifest.webmanifest',
   './icon-192.png',
   './icon-512.png'
