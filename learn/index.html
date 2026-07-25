@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#071b3a">
+  <link rel="manifest" href="./manifest.webmanifest">
+  <title>まなぶ（バレー部）</title>
+  <style>
+    /* §1 基本 / §2 ホーム / §3 カード / §4 図 / §5 レスポンシブ */
+    :root{--navy:#071b3a;--panel:#0d2a52;--panel2:#123563;--blue:#36a9ff;--blue2:#177dcc;--red:#d95b65;--yellow:#ffd45a;--text:#f5f9ff;--muted:#b9cae0;--base:18px}
+    *{box-sizing:border-box}html{background:var(--navy);font-size:var(--base);color-scheme:dark}
+    body{margin:0;min-height:100dvh;background:linear-gradient(180deg,#071b3a,#092348);color:var(--text);font-family:system-ui,-apple-system,"Segoe UI","Noto Sans JP",sans-serif;line-height:1.7}
+    button,a{font:inherit}button{color:inherit}button,[href]{touch-action:manipulation}
+    button:focus-visible,a:focus-visible{outline:3px solid var(--yellow);outline-offset:3px}
+    [hidden]{display:none!important}.screen{min-height:100dvh}.wrap{width:min(100% - 32px,960px);margin:auto}
+    .topbar{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:22px 0 14px}
+    h1,h2,h3,p{margin-top:0}.title{font-size:clamp(1.7rem,5vw,2.25rem);margin:0}.subtitle{color:var(--muted);margin:4px 0 0}
+    .size-box{flex:none;text-align:right}.size-box span{display:block;color:var(--muted);font-size:.72rem;margin-bottom:4px}
+    .size-buttons{display:flex;border:1px solid #3c5a81;border-radius:10px;overflow:hidden}
+    .size-buttons button{min-width:38px;min-height:36px;padding:4px;background:#0b2447;border:0;border-right:1px solid #3c5a81;font-size:.78rem}
+    .size-buttons button:last-child{border:0}.size-buttons button[aria-pressed=true]{background:var(--blue);color:#04172d;font-weight:800}
+    .unit-list{display:grid;gap:16px;padding:10px 0 28px}
+    .unit-card{background:var(--panel);border:1px solid #264a75;border-radius:18px;padding:20px;box-shadow:0 10px 30px #0003}
+    .unit-head{display:flex;gap:14px;align-items:center}.unit-icon{font-size:2rem}.unit-card h2{font-size:1.25rem;margin:0}.unit-card .lead{color:var(--muted);margin:10px 0}
+    .unit-foot{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}.progress-text{font-size:.88rem;color:#d5e5f7}
+    .badge{display:inline-block;padding:2px 9px;border-radius:999px;background:#173b63;color:#bfe5ff;font-weight:700;font-size:.78rem}
+    .primary,.secondary{border:0;border-radius:12px;min-height:48px;padding:10px 20px;font-weight:800;cursor:pointer}
+    .primary{background:var(--blue);color:#04172d;font-size:max(19px,1rem)}.secondary{background:#173b63;border:1px solid #3f648e}
+    .portal-link{display:inline-block;color:#bfe5ff;margin:0 0 32px;padding:8px 0}
+    .viewer-shell{width:min(100%,720px);margin:auto;min-height:100dvh;display:flex;flex-direction:column}
+    .viewer-top{padding:12px 16px 8px;position:sticky;top:0;background:#071b3aee;backdrop-filter:blur(8px);z-index:3}
+    .viewer-nav{display:flex;align-items:center;justify-content:space-between;gap:10px}.back{background:none;border:0;color:#bfe5ff;min-height:44px;padding:4px}
+    .dots{display:flex;justify-content:center;gap:5px;flex-wrap:wrap;margin-top:8px}.dot{width:8px;height:8px;border-radius:50%;background:#43607f}.dot.done{background:#8bd1ff}.dot.now{background:var(--yellow);box-shadow:0 0 0 3px #ffd45a33}
+    .card-area{padding:12px 16px 248px}.learn-card{background:var(--panel);border:1px solid #294f7c;border-radius:20px;padding:clamp(18px,4vw,28px);box-shadow:0 14px 36px #0004}
+    .learn-card h2{line-height:1.35;font-size:clamp(1.35rem,4vw,1.8rem);margin-bottom:18px}.learn-card p{margin-bottom:14px}.question,.scene{font-size:1.1rem;font-weight:750;line-height:1.65}
+    .note{background:#0a2142;border-left:4px solid var(--yellow);padding:10px 12px;margin-top:16px;color:#dce9f8;font-size:.86rem}
+    .fig{margin:16px auto 6px;max-width:560px}.fig svg{display:block;width:100%;height:auto;background:#082346;border-radius:14px;border:1px solid #31577f}
+    .action-zone{position:fixed;z-index:4;left:50%;bottom:0;transform:translateX(-50%);width:min(100%,720px);height:232px;padding:12px 16px max(14px,env(safe-area-inset-bottom));background:#071b3af5;border-top:1px solid #2d527c;box-shadow:0 -12px 28px #0005;display:flex;flex-direction:column}
+    .feedback{min-height:60px;padding:9px 12px;border-radius:10px;background:#135a91;color:white;margin-bottom:8px;line-height:1.4}.feedback.good{background:#137bb7}.feedback strong{display:block}
+    .choices{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin:auto 0 10px}.choices.vertical{grid-template-columns:1fr}
+    .choice{min-height:48px;border:1px solid #47709c;background:#15385f;border-radius:11px;padding:7px 10px;cursor:pointer;font-weight:700}
+    .choice:disabled{opacity:.72}.main-next{width:100%;margin-top:auto}
+    .score-buttons{display:grid;grid-template-columns:1fr 1fr;gap:6px;overflow:auto;padding-bottom:4px}
+    .score-col{display:grid;grid-template-rows:auto repeat(7,minmax(40px,auto));gap:5px}.score-col h3{text-align:center;margin:0;font-size:.74rem}
+    .score-btn{min-height:40px;padding:4px 5px;border-radius:8px;border:1px solid #3971a3;background:#124d7c;font-size:.7rem;line-height:1.2;font-weight:700}
+    .score-col.their .score-btn{background:#73333e;border-color:#ad5360}.score-btn.correct{box-shadow:0 0 0 3px var(--yellow),0 0 18px var(--yellow);background:#167cae}
+    .complete{text-align:center;padding:28px}.complete .star{font-size:3rem}.complete-actions{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:20px}
+    @media(max-width:520px){.wrap{width:min(100% - 24px,960px)}.topbar{display:block}.size-box{text-align:left;margin-top:12px}.size-buttons{width:max-content}.card-area{padding-left:10px;padding-right:10px}.viewer-top{padding-left:10px;padding-right:10px}.action-zone{padding-left:10px;padding-right:10px}.score-btn{font-size:.62rem;padding:3px}.learn-card{border-radius:15px}.complete-actions{grid-template-columns:1fr}}
+  </style>
+  <script src="./content_u1.js"></script>
+  <script src="./content_u2.js"></script>
+  <script src="./content_u3.js"></script>
+</head>
+<body>
+  <!-- §1 画面 -->
+  <main id="home" class="screen">
+    <div class="wrap">
+      <header class="topbar">
+        <div><h1 class="title">📚 まなぶ</h1><p class="subtitle">じぶんのペースで、読んで・さわって・たしかめよう</p></div>
+        <div class="size-box"><span>文字サイズ</span><div class="size-buttons" id="sizeButtons" aria-label="文字サイズ"></div></div>
+      </header>
+      <section id="unitList" class="unit-list" aria-label="ユニット一覧"></section>
+      <a class="portal-link" href="../">← ツール一覧へ</a>
+    </div>
+  </main>
+  <main id="viewer" class="screen" hidden>
+    <div class="viewer-shell">
+      <header class="viewer-top">
+        <div class="viewer-nav"><button class="back" id="backHome">← ホーム</button><strong id="unitName"></strong><span id="cardCount"></span></div>
+        <div class="dots" id="dots"></div>
+      </header>
+      <div class="card-area" id="cardArea"></div>
+      <section class="action-zone" id="actionZone" aria-live="polite"></section>
+    </div>
+  </main>
+  <script>
+    /* §1 状態 / §2 保存 / §3 描画 / §4 操作 / §5 SVG / §6 起動 */
+    (() => {
+      'use strict';
+      const units=window.LEARN_UNITS||[], PROG='vlearn_prog_v1', POS='vlearn_pos_v1', SIZE='vlearn_size_v1';
+      const sizes=[['小',16],['中',18],['大',20],['特大',22]];
+      const actions=[
+        {id:'attack_win',label:'アタック決定',side:'our'},{id:'block',label:'ブロック',side:'our'},
+        {id:'serve_ace',label:'サーブエース',side:'our'},{id:'their_serve_miss',label:'相手のサーブミス',side:'our'},
+        {id:'their_error',label:'相手のミス',side:'our'},{id:'our_other',label:'その他で得点',side:'our'},{id:'our_missed',label:'見逃した',side:'our'},
+        {id:'their_win',label:'相手に決められた',side:'their'},{id:'our_attack_error',label:'うちのアタックミス',side:'their'},
+        {id:'blocked',label:'ブロックされた',side:'their'},{id:'receive_error',label:'うちのレシーブ・つなぎミス',side:'their'},
+        {id:'our_serve_miss',label:'うちのサーブミス',side:'their'},{id:'their_other',label:'その他で得点',side:'their'},{id:'their_missed',label:'見逃した',side:'their'}
+      ];
+      const $=s=>document.querySelector(s), esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+      const read=(key,fallback)=>{try{return JSON.parse(localStorage.getItem(key))??fallback}catch{return fallback}};
+      let prog=read(PROG,{}),pos=read(POS,{}),current=null,index=0,answered=false,run={total:0,correct:0};
+      function save(){localStorage.setItem(PROG,JSON.stringify(prog));localStorage.setItem(POS,JSON.stringify(pos))}
+      function setSize(i){i=Math.max(0,Math.min(3,i));document.documentElement.style.setProperty('--base',`${sizes[i][1]}px`);localStorage.setItem(SIZE,i);[...$('#sizeButtons').children].forEach((b,n)=>b.setAttribute('aria-pressed',String(n===i)))}
+      sizes.forEach(([label],i)=>{const b=document.createElement('button');b.textContent=label;b.onclick=()=>setSize(i);$('#sizeButtons').append(b)});setSize(Number(localStorage.getItem(SIZE)||1));
+      function renderHome(){
+        current=null;$('#viewer').hidden=true;$('#home').hidden=false;$('#unitList').replaceChildren();
+        units.forEach(unit=>{
+          const total=unit.cards.length,done=Math.min(prog[unit.id]?.read||0,total),complete=!!prog[unit.id]?.complete;
+          const el=document.createElement('article');el.className='unit-card';
+          el.innerHTML=`<div class="unit-head"><span class="unit-icon">${esc(unit.icon)}</span><div><h2>${esc(unit.title)}</h2>${complete?'<span class="badge">✅ よんだ！</span>':''}</div></div><p class="lead">${esc(unit.lead)}</p><div class="unit-foot"><span class="progress-text">${done}/${total} まで読んだ</span><button class="primary">${complete?'もう一度':done?'つづきから':'はじめる'}</button></div>`;
+          el.querySelector('button').onclick=()=>enterUnit(unit,complete?0:Math.min(pos[unit.id]||0,total-1));
+          $('#unitList').append(el);
+        });
+      }
+      function enterUnit(unit,start){
+        current=unit;run=start>0?(prog[unit.id]?.run||{total:0,correct:0}):{total:0,correct:0};$('#home').hidden=true;$('#viewer').hidden=false;
+        const saved=Math.min(pos[unit.id]||0,unit.cards.length-1);
+        if(saved>0&&!prog[unit.id]?.complete&&start===saved){
+          $('#unitName').textContent=unit.title;$('#dots').replaceChildren();$('#cardCount').textContent='';
+          $('#cardArea').innerHTML=`<article class="learn-card complete"><h2>どこから読む？</h2><p>${saved}/${unit.cards.length} まで読んだよ。</p><div class="complete-actions"><button class="primary" id="resume">つづきから</button><button class="secondary" id="restart">はじめから</button></div></article>`;
+          $('#actionZone').hidden=true;$('#resume').onclick=()=>showCard(saved);$('#restart').onclick=()=>showCard(0);return;
+        }
+        showCard(start);
+      }
+      function showCard(n){
+        index=n;answered=false;$('#actionZone').hidden=false;pos[current.id]=n;
+        prog[current.id]=prog[current.id]||{read:0,complete:false};prog[current.id].read=Math.max(prog[current.id].read,n);save();
+        const card=current.cards[n];$('#unitName').textContent=current.title;$('#cardCount').textContent=`${n+1}/${current.cards.length}`;
+        $('#dots').setAttribute('aria-label',`カード ${n+1}/${current.cards.length}`);$('#dots').innerHTML=current.cards.map((_,i)=>`<span class="dot ${i<n?'done':i===n?'now':''}"></span>`).join('');
+        let html='<article class="learn-card">';
+        if(card.k==='teach') html+=`<h2>${esc(card.title)}</h2>${card.body.map(p=>`<p>${esc(p)}</p>`).join('')}`;
+        if(card.k==='quiz') html+=`<h2>たしかめよう</h2><p class="question">${esc(card.q)}</p>`;
+        if(card.k==='button') html+=`<h2>どのボタンを押す？</h2><p class="scene">${esc(card.scene)}</p>`;
+        if(card.k==='sheet') html+=`<h2>たしかめよう</h2><p class="question">${esc(card.q)}</p>`;
+        if(card.fig)html+=`<div class="fig">${drawFigure(card.fig)}</div>`;
+        if(card.note)html+=`<div class="note">${esc(card.note)}</div>`;
+        $('#cardArea').innerHTML=html+'</article>';renderAction(card);scrollTo({top:0,behavior:'instant'});
+      }
+      function renderAction(card){
+        const zone=$('#actionZone');zone.replaceChildren();
+        if(card.k==='teach'){zone.innerHTML='<button class="primary main-next">つぎへ</button>';zone.firstElementChild.onclick=next;return}
+        if(card.k==='quiz'||card.k==='sheet'){
+          const choices=document.createElement('div');choices.className='choices'+(card.choices.some(x=>x.length>14)?' vertical':'');
+          card.choices.forEach((label,i)=>{const b=document.createElement('button');b.className='choice';b.textContent=label;b.onclick=()=>answerChoice(i,card,choices);choices.append(b)});zone.append(choices);return;
+        }
+        if(card.k==='button')renderScoreButtons(card);
+      }
+      function feedback(good,title,text){
+        const el=document.createElement('div');el.className=`feedback ${good?'good':''}`;el.innerHTML=`<strong>${esc(title)}</strong>${esc(text)}`;return el;
+      }
+      function finishAnswer(card,good,title,text){
+        answered=true;run.total++;if(good)run.correct++;prog[current.id].run=run;save();const zone=$('#actionZone');zone.replaceChildren(feedback(good,title,text));
+        const b=document.createElement('button');b.className='primary main-next';b.textContent='つづける';b.onclick=next;zone.append(b);
+      }
+      function answerChoice(i,card,box){
+        if(answered)return;[...box.children].forEach(b=>b.disabled=true);
+        const good=i===card.answer;finishAnswer(card,good,good?'そう、それ！':'だいじょうぶ、つぎで とれる',card.why);
+      }
+      function renderScoreButtons(card){
+        const zone=$('#actionZone'),grid=document.createElement('div');grid.className='score-buttons';
+        ['our','their'].forEach(side=>{const col=document.createElement('div');col.className=`score-col ${side}`;col.innerHTML=`<h3>${side==='our'?'うちの得点':'相手の得点'}</h3>`;
+          actions.filter(a=>a.side===side).forEach(a=>{const b=document.createElement('button');b.className='score-btn';b.textContent=a.label;b.onclick=()=>answerButton(a,card,b);col.append(b)});grid.append(col)});zone.append(grid);
+      }
+      function answerButton(action,card,button){
+        if(answered)return;answered=true;run.total++;const correct=action.id===card.answer;if(correct)run.correct++;
+        const answer=actions.find(a=>a.id===card.answer);if(correct)button.classList.add('correct');
+        const also=(card.also||[]).includes(action.id);
+        const title=correct?'そう、それ！':also?`それでもOK！ ただ、「${answer.label}」のほうが近いよ`:`おしい！ こたえは「${answer.label}」`;
+        prog[current.id].run=run;save();const zone=$('#actionZone');zone.replaceChildren();
+        const answerMark=document.createElement('button');answerMark.className='score-btn correct';answerMark.disabled=true;answerMark.textContent=answer.label;
+        zone.append(answerMark,feedback(correct,title,card.why));const b=document.createElement('button');b.className='primary main-next';b.textContent='つづける';b.onclick=next;zone.append(b);
+      }
+      function next(){
+        prog[current.id].read=Math.max(prog[current.id].read,index+1);save();
+        if(index+1<current.cards.length)showCard(index+1);else complete();
+      }
+      function complete(){
+        prog[current.id]={read:current.cards.length,complete:true,run};pos[current.id]=0;save();$('#dots').replaceChildren();$('#cardCount').textContent='';
+        const summary=run.total?`${run.total}問中 ${run.correct}問 その場で正解。のこりも解説を読めたからOK！`:'さいごまで読めたよ。';
+        $('#cardArea').innerHTML=`<article class="learn-card complete"><div class="star">⭐</div><h2>よんだ！</h2><p>${esc(summary)}</p><div class="complete-actions"><button class="primary" id="doneHome">ホームへ</button><button class="secondary" id="again">もう一度</button></div></article>`;
+        $('#actionZone').hidden=true;$('#doneHome').onclick=renderHome;$('#again').onclick=()=>{run={total:0,correct:0};showCard(0)};
+      }
+      $('#backHome').onclick=renderHome;
+      function svg(body,view='0 0 420 300'){return `<svg viewBox="${view}" role="img" aria-label="学習用の図" xmlns="http://www.w3.org/2000/svg"><style>.w{stroke:#fff;stroke-width:4;fill:none}.o{fill:#36a9ff}.r{fill:#d95b65}.y{fill:#ffd45a}.t{fill:#fff;font:700 14px system-ui;text-anchor:middle}.s{fill:#cde2f8;font:13px system-ui;text-anchor:middle}</style>${body}</svg>`}
+      const court=`<rect class="w" x="90" y="25" width="240" height="250"/><line class="w" x1="90" y1="82" x2="330" y2="82"/><text class="s" x="210" y="18">ネット</text>`;
+      function drawFigure(id){
+        const positions=[['P4',130,112],['P3',210,112],['P2',290,112],['P5',130,220],['P6',210,220],['P1',290,220]];
+        if(id==='court-positions')return svg(court+positions.map((p,i)=>`<circle class="${i<3?'o':'y'}" cx="${p[1]}" cy="${p[2]}" r="25"/><text class="t" x="${p[1]}" y="${p[2]+5}" fill="#071b3a">${p[0]}</text>`).join('')+`<text class="s" x="55" y="116">前衛</text><text class="s" x="55" y="224">後衛</text>`);
+        if(id==='court-rotation')return svg(`<defs><marker id="a" markerWidth="8" markerHeight="8" refX="5" refY="3" orient="auto"><path d="M0,0 L0,6 L6,3 z" fill="#ffd45a"/></marker></defs>${court}${positions.map(p=>`<circle class="o" cx="${p[1]}" cy="${p[2]}" r="22"/><text class="t" x="${p[1]}" y="${p[2]+5}">${p[0]}</text>`).join('')}<path d="M285 125 Q330 170 286 215 Q210 270 134 215 Q90 170 134 125 Q210 70 285 125" fill="none" stroke="#ffd45a" stroke-width="5" marker-end="url(#a)"/>`);
+        if(id==='court-side')return svg(`<rect class="o" x="30" y="185" width="180" height="65"/><rect class="r" x="210" y="185" width="180" height="65"/><line class="w" x1="210" y1="65" x2="210" y2="250"/><path class="w" d="M175 65h70M180 85h60M185 105h50"/><text class="t" x="115" y="220">うち（左・青）</text><text class="t" x="305" y="220">相手（右・赤）</text>`);
+        if(id==='net-height')return svg(`<line class="w" x1="50" y1="250" x2="370" y2="250"/><line class="w" x1="120" y1="60" x2="120" y2="250"/><line class="w" x1="280" y1="82" x2="280" y2="250"/><path class="w" d="M80 60h80v95H80zM240 82h80v95h-80z"/><text class="t" x="120" y="45">男子 2.30m</text><text class="t" x="280" y="67">女子 2.15m</text>`);
+        if(id==='three-hits')return svg(`<circle class="o" cx="70" cy="150" r="38"/><circle class="o" cx="210" cy="150" r="38"/><circle class="y" cx="350" cy="150" r="38"/><text class="t" x="70" y="155">レシーブ</text><text class="t" x="210" y="155">トス</text><text class="t" x="350" y="155">スパイク</text><path d="M110 150h55M250 150h55" stroke="#fff" stroke-width="5"/><path class="y" d="M165 150l-14-9v18zM305 150l-14-9v18z"/>`);
+        if(id==='attack-line')return svg(`${court}<line x1="90" y1="150" x2="330" y2="150" stroke="#ffd45a" stroke-width="5"/><text class="t" x="210" y="142">アタックライン</text><circle class="o" cx="140" cy="205" r="22"/><path d="M140 180q25-55 65-65" stroke="#ffd45a" stroke-width="5" fill="none"/><text class="s" x="210" y="245">後衛はラインのうしろから踏み切る</text>`);
+        if(id==='libero')return svg(`${court}<rect x="95" y="155" width="230" height="115" fill="#36a9ff" opacity=".18"/><circle class="y" cx="210" cy="220" r="30"/><text x="210" y="225" class="t" fill="#071b3a">リベロ</text><text class="s" x="210" y="290">後衛だけに入る</text>`);
+        if(id==='scoresheet-basic')return svg(`<rect class="w" x="30" y="35" width="360" height="230"/><text class="t" x="115" y="65">サーブ順</text><text class="t" x="285" y="65">得点</text>${[0,1,2,3,4,5].map(i=>`<rect class="w" x="55" y="${78+i*28}" width="120" height="28"/><text class="s" x="75" y="${98+i*28}">${i+1}</text>`).join('')}${[0,1,2,3].map(r=>[0,1,2,3,4].map(c=>`<rect class="w" x="${220+c*28}" y="${90+r*38}" width="28" height="28"/>`).join('')).join('')}`);
+        return svg(`<text class="t" x="210" y="155">図を準備中</text>`);
+      }
+      if('serviceWorker'in navigator)addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));
+      renderHome();
+    })();
+  </script>
+</body>
+</html>
